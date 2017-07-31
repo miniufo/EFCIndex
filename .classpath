@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/MyPackage"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/PhD"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/ECMWF"/>
+	<classpathentry kind="lib" path="C:/jython2.7.0/jython.jar" sourcepath="C:/jython2.7.0/src"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
