@@ -41,7 +41,7 @@ public final class AllInOne{
 	public static void main(String[] args){
 		TyphoonCMA ty=new TyphoonCMA(path+"babj1705.dat");
 		
-		computeCase(ty.getAsTyphoon("20170807050000"));
+		computeCase(ty.getAsTyphoon("20170807020000"));
 	}
 	
 	static void computeCase(Typhoon tr){
@@ -50,7 +50,7 @@ public final class AllInOne{
 		
 		System.out.println(tr);
 		
-		String rng="lon(70,140);lat(5,50)";
+		String rng="lon(70,140);lat(5,50);"+tr.getTRange();
 		
 		Range r=new Range(rng,dd);
 		Variable[] wind=df.getVariables(r,"u","v");
@@ -69,7 +69,7 @@ public final class AllInOne{
 		
 		
 		/*** computing along-track diagnostics ***/
-		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString("",72,19,2,0.3f,-650,850));
+		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(path+"2017080612.ctl",72,19,2,0.3f,-650,850));
 		CsmDescriptor csd=(CsmDescriptor)df2.getDataDescriptor();
 		
 		CylindricalSpatialModel csm=new CylindricalSpatialModel(csd);
@@ -99,7 +99,7 @@ public final class AllInOne{
 		Variable fm=dm.cMeanPlanetaryVorticity(utm).averageAlong(Dimension.Y, 9,18);
 		Variable ISB=dm.cMeanInertialStabilityByUT(utm).averageAlong(Dimension.Y, 9,18);
 		Variable ULFI=REFC.plus(PEFC).divideEq(ETA).divideEq(86400f); ULFI.setName("ULFI");
-		Variable mpi=tdm.cMPIWNP(sstm);System.out.println(sstm.getData()[0][0][0][10]+"\t"+mpi.getData()[0][0][0][10]);
+		Variable mpi=tdm.cMPIWNP(sstm);
 		
 		dw=DataIOFactory.getDataWrite(dd,path+"alongTrackDiags.dat");
 		dw.writeData(dd,new Variable[]{sstm,vwsm,REFC,PEFC,ETA,zeta,fm,ISB,ULFI,mpi});	dw.closeFile();
@@ -143,7 +143,7 @@ public final class AllInOne{
 			
 			ty.cVelocityByPosition();
 			
-			return ty;
+			return ty.interpolateAlongT(1);
 		}
 	}
 	
@@ -171,7 +171,9 @@ public final class AllInOne{
 		}
 		
 		public Record toRecord(){
-			Record r=new Record(Long.valueOf(predictTime),lon,lat,4);
+			MDate md=new MDate(Long.valueOf(predictTime)).add((Integer.parseInt(forecastHour)-8)+"hr");
+			
+			Record r=new Record(md.getLongTime(),lon,lat,4);
 			
 			r.setData(0,0  );
 			r.setData(1,0  );

@@ -16,7 +16,6 @@ import miniufo.lagrangian.Typhoon;
 import miniufo.application.EquationInSphericalCoordinate;
 import miniufo.application.advanced.CoordinateTransformation;
 import miniufo.application.basic.DynamicMethodsInCC;
-import miniufo.application.basic.ThermoDynamicMethodsInCC;
 
 
 /**
