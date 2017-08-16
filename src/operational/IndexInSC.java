@@ -48,7 +48,7 @@ public final class IndexInSC extends EquationInSphericalCoordinate{
      *
      * @return	2-dimensional horizontal REFC index
      */
-	public static Variable[] c2DHorizontalIndex(DataDescriptor dd,String rng,Typhoon tr,float yinc,int ycount,int xcount,String... types){
+	public static Variable[] c2DHorizontalIndex(DataDescriptor dd,String rng,Typhoon tr,float yinc,int ycount,int xcount,int ystr,int yend,String... types){
 		if(types.length==0) throw new IllegalArgumentException("type required");
 		
 		SphericalSpatialModel ssm=new SphericalSpatialModel(dd);
@@ -80,8 +80,10 @@ public final class IndexInSC extends EquationInSphericalCoordinate{
 			cv[l]=tr.getMeridionalVelocity()[tstart+l];
 		}
 		
-		for(int ystart=r.getYRange()[0]-1,jj=ystart,J=r.getYRange()[1];jj<J;jj++)
-		for(int xstart=r.getXRange()[0]-1,ii=xstart,I=r.getXRange()[1];ii<I;ii++){
+		int outputInterval=Math.round(r.getYRange()[2]*r.getXRange()[2]/20f);
+		
+		for(int ystart=r.getYRange()[0]-1,jj=ystart,J=r.getYRange()[1],ptr=0;jj<J;jj++)
+		for(int xstart=r.getXRange()[0]-1,ii=xstart,I=r.getXRange()[1];ii<I;ii++){ ptr++;
 			float[] olons=new float[idx[0].getTCount()];
 			float[] olats=new float[idx[0].getTCount()];
 			
@@ -104,25 +106,20 @@ public final class IndexInSC extends EquationInSphericalCoordinate{
 			
 			Variable[] CIDX=new Variable[tc];
 			
-			// for 0.3-deg interval
-			int str=9,end=18;	// 300-600 km average
-			//int str=12,end=21;	// 400-700 km average
-			//int str=15,end=24;	// 500-800 km average
-			
 			for(int m=0;m<tc;m++){
 				if(types[m].equalsIgnoreCase("REFC")){
-					CIDX[m]=dm.cREFC(uta,vra).averageAlong(Dimension.Y,str,end);
+					CIDX[m]=dm.cREFC(uta,vra).averageAlong(Dimension.Y,ystr,yend);
 					
 				}else if(types[m].equalsIgnoreCase("PEFC")){
 					Vr.anomalizeX(); // not storm-relative radial velocity
-					CIDX[m]=dm.cPEFC(Vr).averageAlong(Dimension.Y,str,end);
+					CIDX[m]=dm.cPEFC(Vr).averageAlong(Dimension.Y,ystr,yend);
 					
 				}else if(types[m].equalsIgnoreCase("ETA")){
-					CIDX[m]=dm.cMeanAbsoluteVorticity(utm).averageAlong(Dimension.Y,str,end);
+					CIDX[m]=dm.cMeanAbsoluteVorticity(utm).averageAlong(Dimension.Y,ystr,yend);
 					
 				}else if(types[m].equalsIgnoreCase("ULFI")){
 					Vr.anomalizeX(); // not storm-relative radial velocity
-					CIDX[m]=dm.cREFC(uta,vra).plusEq(dm.cPEFC(Vr)).divideEq(dm.cMeanAbsoluteVorticity(utm)).divideEq(86400f).averageAlong(Dimension.Y,str,end);
+					CIDX[m]=dm.cREFC(uta,vra).plusEq(dm.cPEFC(Vr)).divideEq(dm.cMeanAbsoluteVorticity(utm)).divideEq(86400f).averageAlong(Dimension.Y,ystr,yend);
 					
 				}else throw new IllegalArgumentException("invalid type for horizontal index: "+types[m]);
 				
@@ -141,10 +138,8 @@ public final class IndexInSC extends EquationInSphericalCoordinate{
 				}
 			}
 			
-			if(ii==xstart) System.out.print(".");
+			if(ptr%(outputInterval)==0) System.out.print(".");
 		}
-		
-		System.out.println();
 		
 		return idx;
 	}
