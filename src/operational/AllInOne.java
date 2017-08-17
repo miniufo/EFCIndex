@@ -30,6 +30,7 @@ import miniufo.diagnosis.Variable;
 import miniufo.diagnosis.Variable.Dimension;
 import miniufo.io.DataIOFactory;
 import miniufo.io.DataWrite;
+import miniufo.io.IOUtil;
 import miniufo.lagrangian.Record;
 import miniufo.lagrangian.Typhoon;
 import miniufo.util.TicToc;
@@ -111,7 +112,7 @@ public final class AllInOne{
 		if(debug) System.out.println(ty);
 		
 		TicToc.tic("start computing the index");
-		//computeCase(ty);
+		computeCase(ty);
 		TicToc.toc(TimeUnit.MINUTES);
 		
 		generateGS(ty);
@@ -137,6 +138,12 @@ public final class AllInOne{
 		
 		dw=DataIOFactory.getDataWrite(dd,workpath+"intensity.dat"); dw.setPrinting(false);
 		dw.writeData(dd,AccessBestTrack.toIntensityVariables(tr));	dw.closeFile();
+		
+		IOUtil.replaceContent(
+			workpath+"intensity.ctl",
+			dd.getTDef().getFirst().toGradsDate(),
+			new MDate(tr.getTime(0)).toGradsDate()
+		);
 		
 		
 		/*** computing along-track diagnostics ***/
@@ -172,6 +179,12 @@ public final class AllInOne{
 		
 		dw=DataIOFactory.getDataWrite(dd,workpath+"alongTrackDiags.dat"); dw.setPrinting(false);
 		dw.writeData(dd,new Variable[]{sstm,vwsm,REFC,PEFC,ETA,ULFI,mpi});	dw.closeFile();
+		
+		IOUtil.replaceContent(
+			workpath+"alongTrackDiags.ctl",
+			dd.getTDef().getFirst().toGradsDate(),
+			new MDate(tr.getTime(0)).toGradsDate()
+		);
 	}
 	
 	static JSONObject readParameterFile(String fname){
@@ -332,7 +345,7 @@ public final class AllInOne{
 		sb.append("'set cthick 5'\n");
 		sb.append("'set arrowhead -0.3'\n");
 		sb.append("'set arrscl 0.5 80'\n");
-		sb.append("'d skip(u,2);v'\n");
+		sb.append("'d skip(u,4);v'\n");
 		sb.append("'cbarn 1 1 10.4 4.4'\n");
 		sb.append("lon=subwrd(lons,cc)\n");
 		sb.append("lat=subwrd(lats,cc)\n");
