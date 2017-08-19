@@ -10,12 +10,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.json.JSONObject;
 import miniufo.application.advanced.CoordinateTransformation;
 import miniufo.application.basic.DynamicMethodsInCC;
+import miniufo.application.basic.IndexInSC;
 import miniufo.application.basic.ThermoDynamicMethodsInCC;
 import miniufo.basic.ArrayUtil;
 import miniufo.database.AccessBestTrack;
@@ -33,7 +33,6 @@ import miniufo.io.DataWrite;
 import miniufo.io.IOUtil;
 import miniufo.lagrangian.Record;
 import miniufo.lagrangian.Typhoon;
-import miniufo.util.TicToc;
 
 //
 public final class AllInOne{
@@ -66,7 +65,7 @@ public final class AllInOne{
 	
 	//
 	public static void main(String[] args){
-		JSONObject params=readParameterFile("d:/Data/OperationalIndex/RuntimeParams.json");
+		JSONObject params=readParameterFile("d:/Data/OperationalIndex/1703/RuntimeParams.json");
 		
 		workpath      =params.getString("working directory");
 		gridDataFname =params.getString("grid data file"   );
@@ -111,10 +110,7 @@ public final class AllInOne{
 		
 		if(debug) System.out.println(ty);
 		
-		TicToc.tic("start computing the index");
 		computeCase(ty);
-		TicToc.toc(TimeUnit.MINUTES);
-		
 		generateGS(ty);
 	}
 	
@@ -238,7 +234,7 @@ public final class AllInOne{
 			
 			ty.cVelocityByPosition();
 			
-			return ty.interpolateAlongT(1);
+			return ty.interpolateToDT(6*3600);
 		}
 	}
 	

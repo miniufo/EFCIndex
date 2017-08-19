@@ -155,9 +155,9 @@ public final class EFCIndex{
 		
 		/*** computing horizontal indices ***/
 		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,tc.range+tr.getTRange(),tr,
-		0.3f,19,72,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
+		0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
 		Variable[] idx2=IndexInSC.c2DHorizontalIndex(dd,tc.range+tr.getTRange(),0,-10,
-		0.3f,19,72,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
+		0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
 		
 		for(Variable v:ArrayUtil.concatAll(Variable.class,wind,idx1,idx2)) v.setUndef(wind[0].getUndef());
 		for(Variable v:idx1) v.setName(v.getName()+"srf");

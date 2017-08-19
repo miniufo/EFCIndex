@@ -34,6 +34,7 @@ import miniufo.diagnosis.Variable;
 import miniufo.diagnosis.Variable.Dimension;
 import miniufo.io.DataIOFactory;
 import miniufo.io.DataWrite;
+import miniufo.io.IOUtil;
 import miniufo.lagrangian.Typhoon;
 import miniufo.test.util.OpenGrADS;
 
@@ -46,7 +47,7 @@ public final class DownloadData{
 	static final Predicate<Typhoon> cond=ty->{
 		int year=new MDate(ty.getTime(0)).getYear();
 		//return year==1985&&ty.getName().equalsIgnoreCase("Elena");
-		return year==2016&&(Integer.parseInt(ty.getID())>=1619);
+		return year==2016&&(Integer.parseInt(ty.getID())==1619);
 	};
 	
 	static final DataSets ds=DataSets.JMA;
@@ -67,10 +68,10 @@ public final class DownloadData{
 		
 		all.stream().filter(cond).forEach(ty->{
 			// downloading NetCDF data
-			JythonDownload(interp,prepareJSONData(ty));
+			//JythonDownload(interp,prepareJSONData(ty));
 			
 			// extract NetCDF data into binary data
-			extractData(ty);
+			//extractData(ty);
 			
 			// computing index
 			computingIndex(ty);
@@ -221,14 +222,13 @@ public final class DownloadData{
 		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+tr.getID()+".ctl");
 		DataDescriptor dd=df.getDataDescriptor();
 		
-		String domainR="lon(90,190);lat(2,51);";
+		String rng="lon(90,190);lat(2,51);"+tr.getTRange();
 		
-		Range r=new Range(domainR+tr.getTRange(),dd);
+		Range r=new Range(rng,dd);
 		Variable[] wind=df.getVariables(r,"u","v","T");
 		
 		/*** computing horizontal indices ***/
-		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,domainR+tr.getTRange(),tr,
-		0.3f,19,72,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
+		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
 		
 		for(Variable v:ArrayUtil.concatAll(Variable.class,wind,idx1)) v.setUndef(wind[0].getUndef());
 		for(Variable v:idx1) v.setName(v.getName()+"srf");
@@ -239,6 +239,10 @@ public final class DownloadData{
 		dw=DataIOFactory.getDataWrite(dd,npath+"intensity.dat");
 		dw.writeData(dd,AccessBestTrack.toIntensityVariables(tr));	dw.closeFile();
 		
+		IOUtil.replaceContent(npath+"intensity.ctl",
+			dd.getTDef().getFirst().toGradsDate(),
+			new MDate(tr.getTime(0)).toGradsDate()
+		);
 		
 		/*** computing along-track diagnostics ***/
 		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(npath+tr.getID()+".ctl",72,19,2,0.3f,-650,850));
@@ -275,6 +279,11 @@ public final class DownloadData{
 		
 		dw=DataIOFactory.getDataWrite(dd,npath+"alongTrackDiags.dat");
 		dw.writeData(dd,new Variable[]{sstm,vwsm,REFC,PEFC,ETA,zeta,fm,ISB,ULFI,mpi});	dw.closeFile();
+		
+		IOUtil.replaceContent(npath+"alongTrackDiags.ctl",
+			dd.getTDef().getFirst().toGradsDate(),
+			new MDate(tr.getTime(0)).toGradsDate()
+		);
 	}
 	
 	static void generateGS(Typhoon tr){
@@ -432,12 +441,12 @@ public final class DownloadData{
 		sb.append("'close 2'\n");
 		sb.append("'close 1'\n");
 		sb.append("'reinit'\n");
-		sb.append("'quit'\n");
+		//sb.append("'quit'\n");
 		
 		try(FileWriter fw=new FileWriter(npath+"index.gs")){
 			fw.write(sb.toString());
 		}catch(IOException e){ e.printStackTrace(); System.exit(0);}
 		
-		OpenGrADS.runGS(npath+"index.gs");
+		//OpenGrADS.runGS(npath+"index.gs");
 	}
 }

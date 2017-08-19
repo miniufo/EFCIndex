@@ -38,7 +38,7 @@ public final class ParamSensRelative{
 		DataDescriptor dd=df.getDataDescriptor();
 		
 		Variable[] idx=IndexInSC.c2DHorizontalIndex(dd,"lon(85,195);lat(0,60);time(2004.09.14.06,2004.09.14.06)",
-		cu,cv,0.3f,25,72,"REFC","PEFC","AEFC","EAMA","FFCT","FFBS");
+		cu,cv,0.3f,25,72,9,18,"REFC","PEFC","AEFC","EAMA","FFCT","FFBS");
 		
 		for(Variable v:idx) v.setUndef(dd.getUndef(null));
 		

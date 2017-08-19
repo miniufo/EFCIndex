@@ -20,7 +20,7 @@ public final class ParamSensRadius{
 		DataDescriptor dd=df.getDataDescriptor();
 		
 		Variable[] idx=IndexInSC.c2DHorizontalIndex(dd,"lon(85,195);lat(0,60);time(2004.09.14.06,2004.09.14.06)",
-		0.3f,25,72,"REFC","PEFC","AEFC","EAMA","FFCT","FFBS","ISB","ETA");
+		0.3f,25,72,9,18,"REFC","PEFC","AEFC","EAMA","FFCT","FFBS","ISB","ETA");
 		
 		for(Variable v:idx) v.setUndef(dd.getUndef(null));
 		
