@@ -266,7 +266,7 @@ public final class DownloadData{
 		Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 		Variable Va=utvr[1].copy(); Va.anomalizeX();
 		Variable PEFC=dm.cPEFC(Va).averageAlong(Dimension.Y, 9,18);	// 300-600 km
-		dm.cStormRelativeAziRadVelocity(tr.getZonalVelocity(),tr.getMeridionalVelocity(),utvr[0],utvr[1]);
+		dm.cStormRelativeAziRadVelocity(tr.getUVel(),tr.getVVel(),utvr[0],utvr[1]);
 		
 		Variable utm =utvr[0].anomalizeX();	utvr[1].anomalizeX();
 		Variable REFC=dm.cREFC(utvr[0],utvr[1]).averageAlong(Dimension.Y, 9,18);	// 300-600 km
@@ -300,9 +300,9 @@ public final class DownloadData{
 		sb.append("'enable print "+npath+"index.gmf'\n\n");
 		
 		sb.append("lons=\"");
-		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getLongitude(l)+" ");
+		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getXPosition(l)+" ");
 		sb.append("\"\nlats=\"");
-		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getLatitude(l)+" ");
+		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getYPosition(l)+" ");
 		sb.append("\"\n\n");
 		
 		sb.append("'set rgb 16   0   0 255'\n");

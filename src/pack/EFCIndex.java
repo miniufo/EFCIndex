@@ -191,7 +191,7 @@ public final class EFCIndex{
 		Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 		Variable Va=utvr[1].copy(); Va.anomalizeX();
 		Variable PEFC=dm.cPEFC(Va).averageAlong(Dimension.Y, 9,18);	// 300-600 km
-		dm.cStormRelativeAziRadVelocity(tr.getZonalVelocity(),tr.getMeridionalVelocity(),utvr[0],utvr[1]);
+		dm.cStormRelativeAziRadVelocity(tr.getUVel(),tr.getVVel(),utvr[0],utvr[1]);
 		
 		Variable utm=utvr[0].anomalizeX();	utvr[1].anomalizeX();
 		Variable REFC=dm.cREFC(utvr[0],utvr[1]).averageAlong(Dimension.Y, 9,18);	// 300-600 km

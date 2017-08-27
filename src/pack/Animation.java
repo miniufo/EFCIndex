@@ -47,8 +47,8 @@ public class Animation{
 		sb.append("'open "+path+"indexInterp.ctl'\n");
 		sb.append("'open "+path+"intensityInterp.ctl'\n\n");
 		
-		sb.append("lons=\""); for(int l=0;l<tr.getTCount();l++) sb.append(tr.getLongitudes()[l]+" "); sb.append("\"\n");
-		sb.append("lats=\""); for(int l=0;l<tr.getTCount();l++) sb.append(tr.getLatitudes()[l]+" "); sb.append("\"\n");
+		sb.append("lons=\""); for(int l=0;l<tr.getTCount();l++) sb.append(tr.getXPositions()[l]+" "); sb.append("\"\n");
+		sb.append("lats=\""); for(int l=0;l<tr.getTCount();l++) sb.append(tr.getYPositions()[l]+" "); sb.append("\"\n");
 		sb.append("tend=65\n\n");
 		
 		sb.append("'set rgb 16   0   0 255'\n");

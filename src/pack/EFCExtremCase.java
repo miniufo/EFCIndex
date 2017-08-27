@@ -50,7 +50,7 @@ public class EFCExtremCase{
 			Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 			Variable Va=utvr[1].copy(); Va.anomalizeX();
 			
-			dm.cStormRelativeAziRadVelocity(tr.getZonalVelocity(),tr.getMeridionalVelocity(),utvr[0],utvr[1]);
+			dm.cStormRelativeAziRadVelocity(tr.getUVel(),tr.getVVel(),utvr[0],utvr[1]);
 			
 			Variable utm=utvr[0].anomalizeX();	utvr[1].anomalizeX();
 			Variable refc=dm.cRadialAverage(dm.cREFC(utvr[0],utvr[1]), 9,18);	// 300-600 km
