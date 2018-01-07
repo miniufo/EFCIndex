@@ -21,6 +21,7 @@ import miniufo.application.basic.DynamicMethodsInCC;
 import miniufo.application.basic.IndexInSC;
 import miniufo.application.basic.ThermoDynamicMethodsInCC;
 import miniufo.basic.ArrayUtil;
+import miniufo.basic.InterpolationModel.Type;
 import miniufo.database.AccessBestTrack;
 import miniufo.database.AccessBestTrack.DataSets;
 import miniufo.descriptor.CsmDescriptor;
@@ -37,6 +38,7 @@ import miniufo.io.DataWrite;
 import miniufo.io.IOUtil;
 import miniufo.lagrangian.Typhoon;
 import miniufo.test.util.OpenGrADS;
+import miniufo.util.DataInterpolation;
 
 
 //
@@ -46,12 +48,15 @@ public final class DownloadData{
 	
 	static final Predicate<Typhoon> cond=ty->{
 		int year=new MDate(ty.getTime(0)).getYear();
-		//return year==1985&&ty.getName().equalsIgnoreCase("Elena");
-		return year==2016&&(Integer.parseInt(ty.getID())==1619);
+		return ty.getID().equalsIgnoreCase("1603");
+		//return year==2016&&(Integer.parseInt(ty.getID())==1619);
 	};
 	
 	static final DataSets ds=DataSets.JMA;
 	static final String path="D:/Data/ULFI/";
+	static final String domain="lon(90,190);lat(1.5,51)";	// WNP: lon(90,190);lat(1.5,51)
+															// NAT: lon(250,330);lat(1.5,51)
+															// SIO: lon(30,110);lat(-1.5,-51)
 	
 	static final List<Typhoon> all=AccessBestTrack.getTyphoons("d:/Data/Typhoons/"+ds+"/"+ds+".txt","",ds);
 	
@@ -74,10 +79,10 @@ public final class DownloadData{
 			//extractData(ty);
 			
 			// computing index
-			computingIndex(ty);
+			computingIndex(ty,3);
 			
 			// generate GS and plot
-			generateGS(ty);
+			generateGS(ty,3);
 		});
 		
 		interp.close();
@@ -214,38 +219,50 @@ public final class DownloadData{
 		OpenGrADS.runGS(npath+ty.getID()+"Ex.gs");
 	}
 	
-	static void computingIndex(Typhoon tr){
-		int year=new MDate(tr.getTime(0)).getYear();
+	static void computingIndex(Typhoon tr,int times){ // times = 2 means 6hr interval becomes 3hr
+		if(times<1) throw new IllegalArgumentException("times should be at least 1");
 		
-		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
+		Typhoon trInterp=tr.interpolateAlongT(times-1);
 		
-		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+tr.getID()+".ctl");
+		int year=new MDate(trInterp.getTime(0)).getYear();
+		
+		String npath=path+ds+"/"+year+"/"+trInterp.getID()+"/";
+		
+		if(times>1){
+			DiagnosisFactory df=DiagnosisFactory.parseFile(npath+trInterp.getID()+".ctl");
+			DataDescriptor dd=df.getDataDescriptor();
+			
+			DataInterpolation di=new DataInterpolation(dd);
+			di.temporalInterp(npath+trInterp.getID()+"Interp.dat",Type.LINEAR,(dd.getTCount()-1)*times+1);
+		}
+		
+		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+trInterp.getID()+(times>1?"Interp":"")+".ctl");
 		DataDescriptor dd=df.getDataDescriptor();
 		
-		String rng="lon(90,190);lat(2,51);"+tr.getTRange();
+		String rng=domain+";"+trInterp.getTRange();
 		
 		Range r=new Range(rng,dd);
 		Variable[] wind=df.getVariables(r,"u","v","T");
 		
 		/*** computing horizontal indices ***/
-		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
+		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,trInterp,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
 		
 		for(Variable v:ArrayUtil.concatAll(Variable.class,wind,idx1)) v.setUndef(wind[0].getUndef());
 		for(Variable v:idx1) v.setName(v.getName()+"srf");
 		
-		DataWrite dw=DataIOFactory.getDataWrite(dd,npath+"index.dat");
+		DataWrite dw=DataIOFactory.getDataWrite(dd,npath+"index"+(times>1?"Interp":"")+".dat");
 		dw.writeData(dd,ArrayUtil.concatAll(Variable.class,wind,idx1));	dw.closeFile();
 		
-		dw=DataIOFactory.getDataWrite(dd,npath+"intensity.dat");
-		dw.writeData(dd,AccessBestTrack.toIntensityVariables(tr));	dw.closeFile();
+		dw=DataIOFactory.getDataWrite(dd,npath+"intensity"+(times>1?"Interp":"")+".dat");
+		dw.writeData(dd,AccessBestTrack.toIntensityVariables(trInterp));	dw.closeFile();
 		
-		IOUtil.replaceContent(npath+"intensity.ctl",
+		IOUtil.replaceContent(npath+"intensity"+(times>1?"Interp":"")+".ctl",
 			dd.getTDef().getFirst().toGradsDate(),
-			new MDate(tr.getTime(0)).toGradsDate()
+			new MDate(trInterp.getTime(0)).toGradsDate()
 		);
 		
 		/*** computing along-track diagnostics ***/
-		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(npath+tr.getID()+".ctl",72,19,2,0.3f,-650,850));
+		DiagnosisFactory df2=DiagnosisFactory.parseContent(trInterp.toCSMString(npath+trInterp.getID()+(times>1?"Interp":"")+".ctl",72,19,2,0.3f,-650,850));
 		CsmDescriptor csd=(CsmDescriptor)df2.getDataDescriptor();
 		
 		CylindricalSpatialModel csm=new CylindricalSpatialModel(csd);
@@ -266,7 +283,7 @@ public final class DownloadData{
 		Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 		Variable Va=utvr[1].copy(); Va.anomalizeX();
 		Variable PEFC=dm.cPEFC(Va).averageAlong(Dimension.Y, 9,18);	// 300-600 km
-		dm.cStormRelativeAziRadVelocity(tr.getUVel(),tr.getVVel(),utvr[0],utvr[1]);
+		dm.cStormRelativeAziRadVelocity(trInterp.getUVel(),trInterp.getVVel(),utvr[0],utvr[1]);
 		
 		Variable utm =utvr[0].anomalizeX();	utvr[1].anomalizeX();
 		Variable REFC=dm.cREFC(utvr[0],utvr[1]).averageAlong(Dimension.Y, 9,18);	// 300-600 km
@@ -277,32 +294,36 @@ public final class DownloadData{
 		Variable ULFI=REFC.plus(PEFC).divideEq(ETA).divideEq(86400f); ULFI.setName("ULFI");
 		Variable mpi =tdm.cMPIWNP(sstm);
 		
-		dw=DataIOFactory.getDataWrite(dd,npath+"alongTrackDiags.dat");
+		dw=DataIOFactory.getDataWrite(dd,npath+"alongTrackDiags"+(times>1?"Interp":"")+".dat");
 		dw.writeData(dd,new Variable[]{sstm,vwsm,REFC,PEFC,ETA,zeta,fm,ISB,ULFI,mpi});	dw.closeFile();
 		
-		IOUtil.replaceContent(npath+"alongTrackDiags.ctl",
+		IOUtil.replaceContent(npath+"alongTrackDiags"+(times>1?"Interp":"")+".ctl",
 			dd.getTDef().getFirst().toGradsDate(),
-			new MDate(tr.getTime(0)).toGradsDate()
+			new MDate(trInterp.getTime(0)).toGradsDate()
 		);
 	}
 	
-	static void generateGS(Typhoon tr){
-		int year=new MDate(tr.getTime(0)).getYear();
+	static void generateGS(Typhoon tr,int times){
+		if(times<1) throw new IllegalArgumentException("times should be at least 1");
 		
-		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
+		Typhoon trInterp=tr.interpolateAlongT(times-1);
+		
+		int year=new MDate(trInterp.getTime(0)).getYear();
+		
+		String npath=path+ds+"/"+year+"/"+trInterp.getID()+"/";
 		
 		StringBuilder sb=new StringBuilder();
 		
 		sb.append("'open "+npath+"index.ctl'\n");
 		sb.append("'open "+npath+"intensity.ctl'\n");
-		sb.append("'open "+npath+tr.getID()+".ctl'\n");
+		sb.append("'open "+npath+trInterp.getID()+".ctl'\n");
 		sb.append("'open "+npath+"alongTrackDiags.ctl'\n");
 		sb.append("'enable print "+npath+"index.gmf'\n\n");
 		
 		sb.append("lons=\"");
-		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getXPosition(l)+" ");
+		for(int l=0,L=trInterp.getTCount();l<L;l++) sb.append(trInterp.getXPosition(l)+" ");
 		sb.append("\"\nlats=\"");
-		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getYPosition(l)+" ");
+		for(int l=0,L=trInterp.getTCount();l<L;l++) sb.append(trInterp.getYPosition(l)+" ");
 		sb.append("\"\n\n");
 		
 		sb.append("'set rgb 16   0   0 255'\n");
@@ -323,12 +344,17 @@ public final class DownloadData{
 		
 		sb.append("cc=1\n");
 		sb.append("tt=1\n");
-		sb.append("while(tt<="+tr.getTCount()+")\n");
+		sb.append("while(tt<="+trInterp.getTCount()+")\n");
 		sb.append("'set t 'tt\n");
 		sb.append("'q time'\n");
 		sb.append("time=subwrd(result,3)\n");
-		sb.append("'set lon 90 180'\n");
-		sb.append("'set lat 2 51'\n");
+		if(ds==DataSets.NHC){
+			sb.append("'set lon 250 330'\n");
+			sb.append("'set lat 1.5 51'\n");
+		}else{
+			sb.append("'set lon 90 180'\n");
+			sb.append("'set lat 1.5 51'\n");
+		}
 		sb.append("'set lev 200'\n");
 		sb.append("'setvpage 2 2 2 1'\n");
 		sb.append("'set parea 0.7 10 0 8.5'\n");
@@ -348,18 +374,23 @@ public final class DownloadData{
 		sb.append("lon=subwrd(lons,cc)\n");
 		sb.append("lat=subwrd(lats,cc)\n");
 		sb.append("'pty ' lon' 'lat' 0.4 1 9'\n");
-		sb.append("'drawtime "+tr.getName()+"("+tr.getID()+")'\n");
+		sb.append("'drawtime "+trInterp.getName()+"("+trInterp.getID()+")'\n");
 		sb.append("'set x 1'\n");
 		sb.append("'set y 1'\n");
 		sb.append("'set z 1'\n");
-		sb.append("'d prs"+tr.getName()+".2(x=1,y=1,z=1)'\n");
+		sb.append("'d prs"+trInterp.getName()+".2(x=1,y=1,z=1)'\n");
 		sb.append("prs=subwrd(result,4)\n\n");
 		
 		sb.append("'setvpage 2 2 1 1'\n");
 		sb.append("'set parea 0.8 10 0 8.5'\n");
 		sb.append("'setlopts 7 0.2 10 10'\n");
-		sb.append("'set lon 90 180'\n");
-		sb.append("'set lat 2 51'\n");
+		if(ds==DataSets.NHC){
+			sb.append("'set lon 250 330'\n");
+			sb.append("'set lat 1.5 51'\n");
+		}else{
+			sb.append("'set lon 90 180'\n");
+			sb.append("'set lat 1.5 51'\n");
+		}
 		sb.append("'set lev 200'\n");
 		sb.append("'set grid off'\n");
 		sb.append("'set gxout shaded'\n");
@@ -374,8 +405,13 @@ public final class DownloadData{
 		sb.append("'setvpage 2 2 1 2'\n");
 		sb.append("'set parea 0.8 10 0 8.5'\n");
 		sb.append("'setlopts 7 0.2 10 10'\n");
-		sb.append("'set lon 90 180'\n");
-		sb.append("'set lat 2 51'\n");
+		if(ds==DataSets.NHC){
+			sb.append("'set lon 250 330'\n");
+			sb.append("'set lat 1.5 51'\n");
+		}else{
+			sb.append("'set lon 90 180'\n");
+			sb.append("'set lat 1.5 51'\n");
+		}
 		sb.append("'set lev 200'\n");
 		sb.append("'set grid off'\n");
 		sb.append("'set gxout shaded'\n");
@@ -392,12 +428,12 @@ public final class DownloadData{
 		sb.append("'set x 1'\n");
 		sb.append("'set y 1'\n");
 		sb.append("'set lev 200'\n");
-		sb.append("'set t 1 "+tr.getTCount()+"'\n");
+		sb.append("'set t 1 "+trInterp.getTCount()+"'\n");
 		sb.append("'set cthick 12'\n");
 		sb.append("'set cmark 5'\n");
 		sb.append("'set digsize 0.1'\n");
 		sb.append("'set vrange 920 1010'\n");
-		sb.append("'d prs"+tr.getName()+".2(x=1,y=1,z=1)'\n");
+		sb.append("'d prs"+trInterp.getName()+".2(x=1,y=1,z=1)'\n");
 		sb.append("'q w2xy 'time' 'prs\n");
 		sb.append("xx=subwrd(result,3)\n");
 		sb.append("yy=subwrd(result,6)\n");
@@ -441,7 +477,6 @@ public final class DownloadData{
 		sb.append("'close 2'\n");
 		sb.append("'close 1'\n");
 		sb.append("'reinit'\n");
-		//sb.append("'quit'\n");
 		
 		try(FileWriter fw=new FileWriter(npath+"index.gs")){
 			fw.write(sb.toString());

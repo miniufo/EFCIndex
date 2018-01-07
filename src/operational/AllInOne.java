@@ -18,6 +18,7 @@ import miniufo.application.basic.DynamicMethodsInCC;
 import miniufo.application.basic.IndexInSC;
 import miniufo.application.basic.ThermoDynamicMethodsInCC;
 import miniufo.basic.ArrayUtil;
+import miniufo.basic.InterpolationModel.Type;
 import miniufo.database.AccessBestTrack;
 import miniufo.descriptor.CsmDescriptor;
 import miniufo.descriptor.DataDescriptor;
@@ -28,11 +29,13 @@ import miniufo.diagnosis.Range;
 import miniufo.diagnosis.SphericalSpatialModel;
 import miniufo.diagnosis.Variable;
 import miniufo.diagnosis.Variable.Dimension;
+import miniufo.io.CsmDataWriteStream;
 import miniufo.io.DataIOFactory;
 import miniufo.io.DataWrite;
 import miniufo.io.IOUtil;
 import miniufo.lagrangian.Record;
 import miniufo.lagrangian.Typhoon;
+import miniufo.util.DataInterpolation;
 
 //
 public final class AllInOne{
@@ -65,10 +68,18 @@ public final class AllInOne{
 	
 	//
 	public static void main(String[] args){
-		JSONObject params=readParameterFile("d:/Data/OperationalIndex/1703/RuntimeParams.json");
+		/*
+		if(args==null||args.length==0){
+			System.out.println("usage:");
+			System.out.println("java -jar Index.jar d:/Data/RuntimeParams.json");
+			System.exit(0);
+		}
+		
+		JSONObject params=readParameterFile(args[0]);*/
+		JSONObject params=readParameterFile("d:/Data/OperationalIndex/1703Coarse/RuntimeParams.json");
 		
 		workpath      =params.getString("working directory");
-		gridDataFname =params.getString("grid data file"   );
+		gridDataFname =params.getString("grid data file"   ); gridDataFname=interpGridData();
 		TCfname       =params.getString("TC file"          );
 		startTimeBJ   =params.getString("starting time BJ" );
 		range         =params.getString("range"            );
@@ -112,6 +123,35 @@ public final class AllInOne{
 		
 		computeCase(ty);
 		generateGS(ty);
+	}
+	
+	static String interpGridData(){
+		DiagnosisFactory df=DiagnosisFactory.parseFile(workpath+gridDataFname); df.setPrinting(false);
+		DataDescriptor dd=df.getDataDescriptor();
+		
+		int dt=Math.round(dd.getDTDef()[0]);
+		
+		if(dt==3600*6) return gridDataFname;
+		
+		if(dt<3600*6)
+		throw new IllegalArgumentException("deltaT of grid data file ("+dd.getDTDef()[0]/3600+") should be equal or larger than 6hr");
+		
+		if(dt%(3600*6)!=0)
+		throw new IllegalArgumentException("deltaT of grid data file should be multiple of 6hr");
+		
+		if(dt*(dd.getTCount()-1)%(3600*6)!=0)
+		throw new IllegalArgumentException("deltaT of grid data file cannot be divided by 6hr");
+		
+		int ndt=dt*(dd.getTCount()-1)/(3600*6)+1;
+		
+		String[] parts=gridDataFname.split("\\.");
+		
+		String interpFile=parts[0]+"_interp.dat";
+		
+		DataInterpolation di=new DataInterpolation(dd);
+		di.temporalInterp(workpath+interpFile,Type.LINEAR,ndt);
+		
+		return parts[0]+"_interp.ctl";
 	}
 	
 	static void computeCase(Typhoon tr){
@@ -172,6 +212,9 @@ public final class AllInOne{
 		Variable ETA =dm.cMeanAbsoluteVorticity(utm).averageAlong(Dimension.Y,ystr,yend);
 		Variable ULFI=REFC.plus(PEFC).divideEq(ETA).divideEq(86400f); ULFI.setName("ULFI");
 		Variable mpi =tdm.cMPIWNP(sstm);
+		
+		CsmDataWriteStream cdws=new CsmDataWriteStream(workpath+"cylind.dat");
+		cdws.writeData(csd,utvr[0],utvr[1],Va); cdws.closeFile();
 		
 		dw=DataIOFactory.getDataWrite(dd,workpath+"alongTrackDiags.dat"); dw.setPrinting(false);
 		dw.writeData(dd,new Variable[]{sstm,vwsm,REFC,PEFC,ETA,ULFI,mpi});	dw.closeFile();
