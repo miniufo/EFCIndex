@@ -73,19 +73,19 @@ public final class DownloadData{
 		
 		all.stream().filter(cond).forEach(ty->{
 			// downloading NetCDF data
-			//JythonDownload(interp,prepareERA5JSONData(ty));
+			//JythonDownload(interp,prepareInterimJSONData(ty));
 			
 			// extract NetCDF data into binary data
-			//extractERA5Data(ty);
+			//extractInterimData(ty);
 			
 			// computing index
-			computingIndexERA5(ty);
+			//computingIndex(ty,6);
 			
 			// generate GS and plot
-			//generatePlotGS(ty,1);
+			//generatePlotGS(ty,6);
 			
 			// generate animation GS
-			//generateAnimateGS(ty,1);
+			generateAnimateGS(ty,6);
 		});
 		
 		interp.close();
