@@ -47,20 +47,35 @@ public final class DownloadData{
 	//
 	static boolean prsData=false;
 	
+	static final int interpRes=6;	// time interval (in hours) after interpolation
+	
 	static final Predicate<Typhoon> cond=ty->{
 		int year=new MDate(ty.getTime(0)).getYear();
-		return year==2016&&(Integer.parseInt(ty.getID())==1603);
+		return year==2016&&(Integer.parseInt(ty.getID())==1612);
 	};
 	
-	static final DataSets ds=DataSets.JMA;
-	static final String path="D:/Data/ULFI/";
-	static final String domain="lon(90,190);lat(1.5,51)";	// WNP: lon(90,190);lat(1.5,51)
-															// NAT: lon(250,330);lat(1.5,51)
-															// SIO: lon(30,110);lat(-1.5,-51)
+	static final DataSets    ds=DataSets.JMA;
+	static final Reanalysis gds=Reanalysis.ERAInterim;
+	static final Basin    basin=Basin.WNP;
+	
+	static final String path="G:/Data/ULFI/";
+	static final String domain=getDomain(basin);
 	
 	static final List<Typhoon> all=AccessBestTrack.getTyphoons("d:/Data/Typhoons/"+ds+"/"+ds+".txt","",ds);
+	static final DateTimeFormatter fmt=DateTimeFormatter.ofPattern("yyyy-MM-dd").withLocale(Locale.ENGLISH);
 	
-	private static final DateTimeFormatter fmt=DateTimeFormatter.ofPattern("yyyy-MM-dd").withLocale(Locale.ENGLISH);
+	static enum Reanalysis{ ERAInterim,ERA5}
+	static enum Basin{ WNP,NAT,SIO}
+	
+	static String getDomain(Basin basin){
+		// get computational domain, smaller than that of downloading data
+		switch(basin){
+		case WNP: return "lon(90,180);lat(1.5,54)";
+		case NAT: return "lon(243,330);lat(1.5,54)";
+		case SIO: return "lon(21,111);lat(-1.5,-54)";
+		default : throw new IllegalArgumentException("unsupported basin: "+basin);
+		}
+	}
 	
 	
 	//
@@ -73,25 +88,51 @@ public final class DownloadData{
 		
 		all.stream().filter(cond).forEach(ty->{
 			// downloading NetCDF data
-			//JythonDownload(interp,prepareInterimJSONData(ty));
-			
-			// extract NetCDF data into binary data
-			//extractInterimData(ty);
-			
-			// computing index
-			//computingIndex(ty,6);
-			
-			// generate GS and plot
-			//generatePlotGS(ty,6);
-			
-			// generate animation GS
-			generateAnimateGS(ty,6);
+			switch(gds){
+			case ERAInterim:
+				//JythonDownload(interp,prepareJSONDataInterim(ty));
+				//extractDataInterim(ty);					// extract NetCDF data into binary data
+				ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
+				computingIndexInterim(ty,6/interpRes);	// computing index
+				//generatePlotGS(ty);						// generate GS and plot
+				//generateAnimateGS(ty);					// generate animation GS
+				break;
+				
+			case ERA5:
+				JythonDownload(interp,prepareJSONDataERA5(ty));
+				extractDataERA5(ty);					// extract NetCDF data into binary data
+				ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
+				computingIndexERA5(ty);					// computing index
+				generatePlotGS(ty);						// generate GS and plot
+				generateAnimateGS(ty);					// generate animation GS
+				break;
+
+			default:
+				throw new IllegalArgumentException("unsupported gridded dataset: "+gds);
+			}
 		});
 		
 		interp.close();
 	}
 	
-	static JSONObject[] prepareInterimJSONData(Typhoon ty){
+	static void JythonDownload(PythonInterpreter interp,JSONObject[] jsons){
+		PyFunction parser=interp.get("parseFunc"   ,PyFunction.class);
+		PyMethod retrieve=interp.get("retrieve",PyMethod.class);
+		
+		Path p=Paths.get(jsons[0].get("target").toString()).getParent();
+		
+		if(!Files.exists(p)){
+			try{Files.createDirectories(p);}
+			catch(IOException e){ e.printStackTrace(); System.exit(0);}
+		}
+		
+		for(JSONObject json:jsons){
+			PyObject pyJson=parser.__call__(new PyString(json.toString()));
+			retrieve.__call__(pyJson);
+		}
+	}
+	
+	static JSONObject[] prepareJSONDataInterim(Typhoon ty){
 		int year=new MDate(ty.getTime(0)).getYear();
 		
 		String id=ty.getID();
@@ -115,6 +156,12 @@ public final class DownloadData{
 		reP.put("type"    , "an");	// an/fc
 		reP.put("resol"   , "av");
 		reP.put("grid"    , "0.75/0.75");
+		if(basin==Basin.NAT)
+			reP.put("area"    , "78/231/-9/357"); // north/west/south/east
+		else if(basin==Basin.WNP)
+			reP.put("area"    , "78/81/-9/210"); // north/west/south/east
+		else if(basin==Basin.SIO)
+			reP.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reP.put("format"  , "netcdf");
 		reP.put("target"  , target+"Pl.nc");
 		
@@ -130,13 +177,19 @@ public final class DownloadData{
 		reS.put("type"    , "an");	// an/fc
 		reS.put("resol"   , "av");
 		reS.put("grid"    , "0.75/0.75");
+		if(basin==Basin.NAT)
+			reS.put("area"    , "78/231/-9/357"); // north/west/south/east
+		else if(basin==Basin.WNP)
+			reS.put("area"    , "78/81/-9/210"); // north/west/south/east
+		else if(basin==Basin.SIO)
+			reS.put("area"    , "9/0/-78/120"); // north/west/south/east
 		reS.put("format"  , "netcdf");
 		reS.put("target"  , target+"Sfc.nc");
 		
 		return new JSONObject[]{reP,reS};
 	}
 	
-	static JSONObject[] prepareERA5JSONData(Typhoon ty){
+	static JSONObject[] prepareJSONDataERA5(Typhoon ty){
 		int year=new MDate(ty.getTime(0)).getYear();
 		
 		String id=ty.getID();
@@ -163,6 +216,12 @@ public final class DownloadData{
 		reP.put("type"    , "an");	// an/fc
 		reP.put("resol"   , "av");
 		reP.put("grid"    , "0.3/0.3");
+		if(basin==Basin.NAT)
+			reP.put("area"    , "78/231/-9/357"); // north/west/south/east
+		else if(basin==Basin.WNP)
+			reP.put("area"    , "78/81/-9/210"); // north/west/south/east
+		else if(basin==Basin.SIO)
+			reP.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reP.put("format"  , "netcdf");
 		reP.put("target"  , target+"Pl.nc");
 		
@@ -181,30 +240,19 @@ public final class DownloadData{
 		reS.put("type"    , "an");	// an/fc
 		reS.put("resol"   , "av");
 		reS.put("grid"    , "0.3/0.3");
+		if(basin==Basin.NAT)
+			reS.put("area"    , "78/231/-9/357"); // north/west/south/east
+		else if(basin==Basin.WNP)
+			reS.put("area"    , "78/81/-9/210"); // north/west/south/east
+		else if(basin==Basin.SIO)
+			reS.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reS.put("format"  , "netcdf");
 		reS.put("target"  , target+"Sfc.nc");
 		
 		return new JSONObject[]{reP,reS};
 	}
 	
-	static void JythonDownload(PythonInterpreter interp,JSONObject[] jsons){
-		PyFunction parser=interp.get("parseFunc"   ,PyFunction.class);
-		PyMethod retrieve=interp.get("retrieve",PyMethod.class);
-		
-		Path p=Paths.get(jsons[0].get("target").toString()).getParent();
-		
-		if(!Files.exists(p)){
-			try{Files.createDirectories(p);}
-			catch(IOException e){ e.printStackTrace(); System.exit(0);}
-		}
-		
-		for(JSONObject json:jsons){
-			PyObject pyJson=parser.__call__(new PyString(json.toString()));
-			retrieve.__call__(pyJson);
-		}
-	}
-	
-	static void extractInterimData(Typhoon ty){
+	static void extractDataInterim(Typhoon ty){
 		MDate tstr=new MDate(ty.getTime(0));
 		
 		int year=tstr.getYear();
@@ -223,9 +271,9 @@ public final class DownloadData{
 		sb.append("'sdfopen "+npath+ty.getID()+"Pl.nc'\n");
 		sb.append("'sdfopen "+npath+ty.getID()+"Sfc.nc'\n");
 		sb.append("'set gxout fwrite'\n");
-		sb.append("'set fwrite "+npath+ty.getID()+".dat'\n\n");
+		sb.append("'set fwrite "+npath+ty.getID()+"_"+interpRes+".dat'\n\n");
 		
-		sb.append("'set x 1 480'\n\n");
+		//sb.append("'set x 1 480'\n\n");
 		
 		sb.append("tt="+offset+"\n");
 		sb.append("while(tt<="+(ty.getTCount()-1+offset)+")\n");
@@ -252,11 +300,11 @@ public final class DownloadData{
 		
 		sb=new StringBuilder();
 		
-		sb.append("dset ^"+ty.getID()+".dat\n");
+		sb.append("dset ^"+ty.getID()+"_"+interpRes+".dat\n");
 		sb.append("undef -9.99e8\n");
 		sb.append("title "+ty.getID()+"\n");
-		sb.append("xdef 480 linear   0 0.75\n");
-		sb.append("ydef 241 linear -90 0.75\n");
+		sb.append("xdef 173 linear  81 0.75\n");
+		sb.append("ydef 117 linear  -9 0.75\n");
 		sb.append("zdef   2 levels 850 200\n");
 		sb.append("tdef "+ty.getTCount()+" linear "+new MDate(ty.getTime(0)).toGradsDate()+" 6hr\n");
 		sb.append("vars 4\n");
@@ -266,14 +314,14 @@ public final class DownloadData{
 		sb.append("T   2 99 temperature (K)\n");
 		sb.append("endvars\n");
 		
-		try(FileWriter fw=new FileWriter(npath+ty.getID()+".ctl")){
+		try(FileWriter fw=new FileWriter(npath+ty.getID()+"_"+interpRes+".ctl")){
 			fw.write(sb.toString());
 		}catch(IOException e){ e.printStackTrace(); System.exit(0);}
 		
 		OpenGrADS.runGS(npath+ty.getID()+"Ex.gs");
 	}
-
-	static void extractERA5Data(Typhoon ty){
+	
+	static void extractDataERA5(Typhoon ty){
 		MDate tstr=new MDate(ty.getTime(0));
 		
 		int year=tstr.getYear();
@@ -294,7 +342,7 @@ public final class DownloadData{
 		sb.append("'set gxout fwrite'\n");
 		sb.append("'set fwrite "+npath+ty.getID()+".dat'\n\n");
 		
-		sb.append("'set x 1 1200'\n\n");
+		//sb.append("'set x 1 1200'\n\n");
 		
 		sb.append("tt="+offset+"\n");
 		sb.append("while(tt<="+((ty.getTCount()-1)*6+offset)+")\n");
@@ -343,50 +391,48 @@ public final class DownloadData{
 		OpenGrADS.runGS(npath+ty.getID()+"Ex.gs");
 	}
 	
-	static void computingIndex(Typhoon tr,int times){ // times = 2 means 6hr interval becomes 3hr
+	static void computingIndexInterim(Typhoon tr,int times){ // times = 2 means 6hr interval becomes 3hr
 		if(times<1) throw new IllegalArgumentException("times should be at least 1");
 		
-		Typhoon trInterp=tr.interpolateAlongT(times-1);
+		int year=new MDate(tr.getTime(0)).getYear();
 		
-		int year=new MDate(trInterp.getTime(0)).getYear();
-		
-		String npath=path+ds+"/"+year+"/"+trInterp.getID()+"/";
+		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
 		
 		if(times>1){
-			DiagnosisFactory df=DiagnosisFactory.parseFile(npath+trInterp.getID()+".ctl");
+			DiagnosisFactory df=DiagnosisFactory.parseFile(npath+tr.getID()+"_6.ctl");
 			DataDescriptor dd=df.getDataDescriptor();
 			
 			DataInterpolation di=new DataInterpolation(dd);
-			di.temporalInterp(npath+trInterp.getID()+"Interp.dat",Type.LINEAR,(dd.getTCount()-1)*times+1);
+			di.temporalInterp(npath+tr.getID()+"_"+interpRes+".dat",Type.LINEAR,(dd.getTCount()-1)*times+1);
 		}
 		
-		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+trInterp.getID()+(times>1?"Interp":"")+".ctl");
+		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+tr.getID()+"_"+interpRes+".ctl");
 		DataDescriptor dd=df.getDataDescriptor();
 		
-		String rng=domain+";"+trInterp.getTRange();
+		String rng=domain+";"+tr.getTRange();
 		
 		Range r=new Range(rng,dd);
 		Variable[] wind=df.getVariables(r,"u","v","T");
 		
 		/*** computing horizontal indices ***/
-		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,trInterp,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
+		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
 		
 		for(Variable v:ArrayUtil.concatAll(Variable.class,wind,idx1)) v.setUndef(wind[0].getUndef());
 		for(Variable v:idx1) v.setName(v.getName()+"srf");
 		
-		DataWrite dw=DataIOFactory.getDataWrite(dd,npath+"index"+(times>1?"Interp":"")+".dat");
+		DataWrite dw=DataIOFactory.getDataWrite(dd,npath+"index_"+interpRes+".dat");
 		dw.writeData(dd,ArrayUtil.concatAll(Variable.class,wind,idx1));	dw.closeFile();
 		
-		dw=DataIOFactory.getDataWrite(dd,npath+"intensity"+(times>1?"Interp":"")+".dat");
-		dw.writeData(dd,AccessBestTrack.toIntensityVariables(trInterp));	dw.closeFile();
+		dw=DataIOFactory.getDataWrite(dd,npath+"intensity_"+interpRes+".dat");
+		dw.writeData(dd,AccessBestTrack.toIntensityVariables(tr));	dw.closeFile();
 		
-		IOUtil.replaceContent(npath+"intensity"+(times>1?"Interp":"")+".ctl",
+		IOUtil.replaceContent(npath+"intensity_"+interpRes+".ctl",
 			dd.getTDef().getFirst().toGradsDate(),
-			new MDate(trInterp.getTime(0)).toGradsDate()
+			new MDate(tr.getTime(0)).toGradsDate()
 		);
 		
 		/*** computing along-track diagnostics ***/
-		DiagnosisFactory df2=DiagnosisFactory.parseContent(trInterp.toCSMString(npath+trInterp.getID()+(times>1?"Interp":"")+".ctl",72,19,2,0.3f,-650,850));
+		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(npath+tr.getID()+"_"+interpRes+".ctl",72,19,2,0.3f,-650,850));
 		CsmDescriptor csd=(CsmDescriptor)df2.getDataDescriptor();
 		
 		CylindricalSpatialModel csm=new CylindricalSpatialModel(csd);
@@ -407,7 +453,7 @@ public final class DownloadData{
 		Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 		Variable Va=utvr[1].copy(); Va.anomalizeX();
 		Variable PEFC=dm.cPEFC(Va).averageAlong(Dimension.Y, 9,18);	// 300-600 km
-		dm.cStormRelativeAziRadVelocity(trInterp.getUVel(),trInterp.getVVel(),utvr[0],utvr[1]);
+		dm.cStormRelativeAziRadVelocity(tr.getUVel(),tr.getVVel(),utvr[0],utvr[1]);
 		
 		Variable utm =utvr[0].anomalizeX();	utvr[1].anomalizeX();
 		Variable REFC=dm.cREFC(utvr[0],utvr[1]).averageAlong(Dimension.Y, 9,18);	// 300-600 km
@@ -418,32 +464,30 @@ public final class DownloadData{
 		Variable ULFI=REFC.plus(PEFC).divideEq(ETA).divideEq(86400f); ULFI.setName("ULFI");
 		Variable mpi =tdm.cMPIWNP(sstm);
 		
-		dw=DataIOFactory.getDataWrite(dd,npath+"alongTrackDiags"+(times>1?"Interp":"")+".dat");
+		dw=DataIOFactory.getDataWrite(dd,npath+"alongTrackDiags_"+interpRes+".dat");
 		dw.writeData(dd,new Variable[]{sstm,vwsm,REFC,PEFC,ETA,zeta,fm,ISB,ULFI,mpi});	dw.closeFile();
 		
-		IOUtil.replaceContent(npath+"alongTrackDiags"+(times>1?"Interp":"")+".ctl",
+		IOUtil.replaceContent(npath+"alongTrackDiags_"+interpRes+".ctl",
 			dd.getTDef().getFirst().toGradsDate(),
-			new MDate(trInterp.getTime(0)).toGradsDate()
+			new MDate(tr.getTime(0)).toGradsDate()
 		);
 	}
 	
 	static void computingIndexERA5(Typhoon tr){ // times = 2 means 6hr interval becomes 3hr
-		Typhoon trInterp=tr.interpolateAlongT(5);
+		int year=new MDate(tr.getTime(0)).getYear();
 		
-		int year=new MDate(trInterp.getTime(0)).getYear();
+		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
 		
-		String npath=path+ds+"/"+year+"/"+trInterp.getID()+"/";
-		
-		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+trInterp.getID()+".ctl");
+		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+tr.getID()+".ctl");
 		DataDescriptor dd=df.getDataDescriptor();
 		
-		String rng=domain+";"+trInterp.getTRange();
+		String rng=domain+";"+tr.getTRange();
 		
 		Range r=new Range(rng,dd);
 		Variable[] wind=df.getVariables(r,"u","v","T");
 		
 		/*** computing horizontal indices ***/
-		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,trInterp,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
+		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
 		
 		for(Variable v:ArrayUtil.concatAll(Variable.class,wind,idx1)) v.setUndef(wind[0].getUndef());
 		for(Variable v:idx1) v.setName(v.getName()+"srf");
@@ -452,15 +496,15 @@ public final class DownloadData{
 		dw.writeData(dd,ArrayUtil.concatAll(Variable.class,wind,idx1));	dw.closeFile();
 		
 		dw=DataIOFactory.getDataWrite(dd,npath+"intensity.dat");
-		dw.writeData(dd,AccessBestTrack.toIntensityVariables(trInterp));	dw.closeFile();
+		dw.writeData(dd,AccessBestTrack.toIntensityVariables(tr));	dw.closeFile();
 		
 		IOUtil.replaceContent(npath+"intensity.ctl",
 			dd.getTDef().getFirst().toGradsDate(),
-			new MDate(trInterp.getTime(0)).toGradsDate()
+			new MDate(tr.getTime(0)).toGradsDate()
 		);
 		
 		/*** computing along-track diagnostics ***/
-		DiagnosisFactory df2=DiagnosisFactory.parseContent(trInterp.toCSMString(npath+trInterp.getID()+".ctl",72,19,2,0.3f,-650,850));
+		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(npath+tr.getID()+".ctl",72,19,2,0.3f,-650,850));
 		CsmDescriptor csd=(CsmDescriptor)df2.getDataDescriptor();
 		
 		CylindricalSpatialModel csm=new CylindricalSpatialModel(csd);
@@ -481,7 +525,7 @@ public final class DownloadData{
 		Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 		Variable Va=utvr[1].copy(); Va.anomalizeX();
 		Variable PEFC=dm.cPEFC(Va).averageAlong(Dimension.Y, 9,18);	// 300-600 km
-		dm.cStormRelativeAziRadVelocity(trInterp.getUVel(),trInterp.getVVel(),utvr[0],utvr[1]);
+		dm.cStormRelativeAziRadVelocity(tr.getUVel(),tr.getVVel(),utvr[0],utvr[1]);
 		
 		Variable utm =utvr[0].anomalizeX();	utvr[1].anomalizeX();
 		Variable REFC=dm.cREFC(utvr[0],utvr[1]).averageAlong(Dimension.Y, 9,18);	// 300-600 km
@@ -497,31 +541,27 @@ public final class DownloadData{
 		
 		IOUtil.replaceContent(npath+"alongTrackDiags.ctl",
 			dd.getTDef().getFirst().toGradsDate(),
-			new MDate(trInterp.getTime(0)).toGradsDate()
+			new MDate(tr.getTime(0)).toGradsDate()
 		);
 	}
 	
-	static void generatePlotGS(Typhoon tr,int times){
-		if(times<1) throw new IllegalArgumentException("times should be at least 1");
+	static void generatePlotGS(Typhoon tr){
+		int year=new MDate(tr.getTime(0)).getYear();
 		
-		Typhoon trInterp=tr.interpolateAlongT(times-1);
-		
-		int year=new MDate(trInterp.getTime(0)).getYear();
-		
-		String npath=path+ds+"/"+year+"/"+trInterp.getID()+"/";
+		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
 		
 		StringBuilder sb=new StringBuilder();
 		
-		sb.append("'open "+npath+"index"+(times>1?"Interp":"")+".ctl'\n");
-		sb.append("'open "+npath+"intensity"+(times>1?"Interp":"")+".ctl'\n");
-		sb.append("'open "+npath+trInterp.getID()+(times>1?"Interp":"")+".ctl'\n");
-		sb.append("'open "+npath+"alongTrackDiags"+(times>1?"Interp":"")+".ctl'\n");
-		sb.append("'enable print "+npath+"index"+(times>1?"Interp":"")+".gmf'\n\n");
+		sb.append("'open "+npath+"index_"+interpRes+".ctl'\n");
+		sb.append("'open "+npath+"intensity_"+interpRes+".ctl'\n");
+		sb.append("'open "+npath+tr.getID()+"_"+interpRes+".ctl'\n");
+		sb.append("'open "+npath+"alongTrackDiags_"+interpRes+".ctl'\n");
+		sb.append("'enable print "+npath+"index_"+interpRes+".gmf'\n\n");
 		
 		sb.append("lons=\"");
-		for(int l=0,L=trInterp.getTCount();l<L;l++) sb.append(trInterp.getXPosition(l)+" ");
+		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getXPosition(l)+" ");
 		sb.append("\"\nlats=\"");
-		for(int l=0,L=trInterp.getTCount();l<L;l++) sb.append(trInterp.getYPosition(l)+" ");
+		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getYPosition(l)+" ");
 		sb.append("\"\n\n");
 		
 		sb.append("'set rgb 16   0   0 255'\n");
@@ -542,17 +582,10 @@ public final class DownloadData{
 		
 		sb.append("cc=1\n");
 		sb.append("tt=1\n");
-		sb.append("while(tt<="+trInterp.getTCount()+")\n");
+		sb.append("while(tt<="+tr.getTCount()+")\n");
 		sb.append("'set t 'tt\n");
 		sb.append("'q time'\n");
 		sb.append("time=subwrd(result,3)\n");
-		if(ds==DataSets.NHC){
-			sb.append("'set lon 250 330'\n");
-			sb.append("'set lat 1.5 51'\n");
-		}else{
-			sb.append("'set lon 90 180'\n");
-			sb.append("'set lat 1.5 51'\n");
-		}
 		sb.append("'set lev 200'\n");
 		sb.append("'setvpage 2 2 2 1'\n");
 		sb.append("'set parea 0.7 10 0 8.5'\n");
@@ -572,23 +605,16 @@ public final class DownloadData{
 		sb.append("lon=subwrd(lons,cc)\n");
 		sb.append("lat=subwrd(lats,cc)\n");
 		sb.append("'pty ' lon' 'lat' 0.4 1 9'\n");
-		sb.append("'drawtime "+trInterp.getName()+"("+trInterp.getID()+")'\n");
+		sb.append("'drawtime "+tr.getName()+"("+tr.getID()+")'\n");
 		sb.append("'set x 1'\n");
 		sb.append("'set y 1'\n");
 		sb.append("'set z 1'\n");
-		sb.append("'d prs"+trInterp.getName()+".2(x=1,y=1,z=1)'\n");
+		sb.append("'d prs"+tr.getName()+".2(x=1,y=1,z=1)'\n");
 		sb.append("prs=subwrd(result,4)\n\n");
 		
 		sb.append("'setvpage 2 2 1 1'\n");
 		sb.append("'set parea 0.8 10 0 8.5'\n");
 		sb.append("'setlopts 7 0.2 10 10'\n");
-		if(ds==DataSets.NHC){
-			sb.append("'set lon 250 330'\n");
-			sb.append("'set lat 1.5 51'\n");
-		}else{
-			sb.append("'set lon 90 180'\n");
-			sb.append("'set lat 1.5 51'\n");
-		}
 		sb.append("'set lev 200'\n");
 		sb.append("'set grid off'\n");
 		sb.append("'set gxout shaded'\n");
@@ -603,13 +629,6 @@ public final class DownloadData{
 		sb.append("'setvpage 2 2 1 2'\n");
 		sb.append("'set parea 0.8 10 0 8.5'\n");
 		sb.append("'setlopts 7 0.2 10 10'\n");
-		if(ds==DataSets.NHC){
-			sb.append("'set lon 250 330'\n");
-			sb.append("'set lat 1.5 51'\n");
-		}else{
-			sb.append("'set lon 90 180'\n");
-			sb.append("'set lat 1.5 51'\n");
-		}
 		sb.append("'set lev 200'\n");
 		sb.append("'set grid off'\n");
 		sb.append("'set gxout shaded'\n");
@@ -626,12 +645,12 @@ public final class DownloadData{
 		sb.append("'set x 1'\n");
 		sb.append("'set y 1'\n");
 		sb.append("'set lev 200'\n");
-		sb.append("'set t 1 "+trInterp.getTCount()+"'\n");
+		sb.append("'set t 1 "+tr.getTCount()+"'\n");
 		sb.append("'set cthick 12'\n");
 		sb.append("'set cmark 5'\n");
 		sb.append("'set digsize 0.1'\n");
 		sb.append("'set vrange 920 1010'\n");
-		sb.append("'d prs"+trInterp.getName()+".2(x=1,y=1,z=1)'\n");
+		sb.append("'d prs"+tr.getName()+".2(x=1,y=1,z=1)'\n");
 		sb.append("'q w2xy 'time' 'prs\n");
 		sb.append("xx=subwrd(result,3)\n");
 		sb.append("yy=subwrd(result,6)\n");
@@ -676,30 +695,26 @@ public final class DownloadData{
 		sb.append("'close 1'\n");
 		sb.append("'reinit'\n");
 		
-		try(FileWriter fw=new FileWriter(npath+"index"+(times>1?"Interp":"")+".gs")){
+		try(FileWriter fw=new FileWriter(npath+"index_"+interpRes+".gs")){
 			fw.write(sb.toString());
 		}catch(IOException e){ e.printStackTrace(); System.exit(0);}
 		
 		//OpenGrADS.runGS(npath+"index.gs");
 	}
 	
-	static void generateAnimateGS(Typhoon tr,int times){
-		if(times<1) throw new IllegalArgumentException("times should be at least 1");
+	static void generateAnimateGS(Typhoon tr){
+		int year=new MDate(tr.getTime(0)).getYear();
 		
-		Typhoon trInterp=tr.interpolateAlongT(times-1);
-		
-		int year=new MDate(trInterp.getTime(0)).getYear();
-		
-		String npath=path+ds+"/"+year+"/"+trInterp.getID()+"/";
+		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
 		
 		StringBuffer sb=new StringBuffer();
 		
-		sb.append("'open "+npath+"index"+(times>1?"Interp":"")+".ctl'\n");
-		sb.append("'open "+npath+"intensity"+(times>1?"Interp":"")+".ctl'\n\n");
+		sb.append("'open "+npath+"index_"+interpRes+".ctl'\n");
+		sb.append("'open "+npath+"intensity_"+interpRes+".ctl'\n\n");
 		
 		sb.append("lons=\""); for(int l=0;l<tr.getTCount();l++) sb.append(tr.getXPositions()[l]+" "); sb.append("\"\n");
 		sb.append("lats=\""); for(int l=0;l<tr.getTCount();l++) sb.append(tr.getYPositions()[l]+" "); sb.append("\"\n");
-		sb.append("tend="+trInterp.getTCount()+"\n\n");
+		sb.append("tend="+tr.getTCount()+"\n\n");
 		
 		sb.append("'set rgb 16   0   0 255'\n");
 		sb.append("'set rgb 17  55  55 255'\n");
@@ -719,8 +734,6 @@ public final class DownloadData{
 		sb.append("'set grads off'\n");
 		sb.append("'set mpdset mres'\n");
 		sb.append("'set map 5 1 7'\n");
-		sb.append("'set lon 90 150'\n");
-		sb.append("'set lev 200'\n");
 		sb.append("'set t 'tt\n");
 		sb.append("'q time'\n");
 		sb.append("tim=subwrd(result,3)\n");
@@ -769,7 +782,7 @@ public final class DownloadData{
 		sb.append("'draw mark 3 'xx' 'yy' 0.3'\n");
 		sb.append("'draw title minimum central pressure'\n");
 		sb.append("ttt=tt+100\n");
-		sb.append("'printim "+npath+"animation"+(times>1?"Interp":"")+"'ttt'.png white x1600 y1200'\n");
+		sb.append("'printim "+npath+"animation_"+interpRes+"'ttt'.png white x1600 y1200'\n");
 		sb.append("'c'\n");
 		sb.append("cc=cc+1\n");
 		sb.append("tt=tt+1\n");
@@ -780,12 +793,12 @@ public final class DownloadData{
 		sb.append("'close 1'\n");
 		sb.append("'reinit'\n\n");
 		
-		sb.append("'!magick convert -delay 8 -crop 1400x735+50+20 +repage "+npath+"animation"+
-			(times>1?"Interp":"")+"*.png "+npath+"animation"+(times>1?"Interp":"")+".gif'\n");
-		sb.append("'!rm "+npath+"animation"+(times>1?"Interp":"")+"*.png'\n");
+		sb.append("'!magick convert -delay 8 -crop 1400x735+50+20 +repage "+npath+"animation_"+
+			interpRes+"*.png "+npath+"animation_"+interpRes+".gif'\n");
+		sb.append("'!rm "+npath+"animation_"+interpRes+"*.png'\n");
 		
 		try{
-			FileWriter fw=new FileWriter(new File(npath+"animation"+(times>1?"Interp":"")+".gs"));
+			FileWriter fw=new FileWriter(new File(npath+"animation_"+interpRes+".gs"));
 			fw.write(sb.toString());	fw.close();
 			
 		}catch(Exception e){ e.printStackTrace(); System.exit(0);}
