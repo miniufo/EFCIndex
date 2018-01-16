@@ -76,7 +76,7 @@ public final class AllInOne{
 		}
 		
 		JSONObject params=readParameterFile(args[0]);*/
-		JSONObject params=readParameterFile("d:/Data/OperationalIndex/1703Coarse/RuntimeParams.json");
+		JSONObject params=readParameterFile("d:/Data/ULFI/output/RuntimeParams.json");
 		
 		workpath      =params.getString("working directory");
 		gridDataFname =params.getString("grid data file"   ); gridDataFname=interpGridData();
