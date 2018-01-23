@@ -58,7 +58,7 @@ public final class DownloadData{
 	static final Reanalysis gds=Reanalysis.ERAInterim;
 	static final Basin    basin=Basin.WNP;
 	
-	static final String path="G:/Data/ULFI/";
+	static final String path="D:/Data/ULFI/";
 	static final String domain=getDomain(basin);
 	
 	static final List<Typhoon> all=AccessBestTrack.getTyphoons("d:/Data/Typhoons/"+ds+"/"+ds+".txt","",ds);
@@ -92,9 +92,9 @@ public final class DownloadData{
 			case ERAInterim:
 				//JythonDownload(interp,prepareJSONDataInterim(ty));
 				//extractDataInterim(ty);					// extract NetCDF data into binary data
-				ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
-				computingIndexInterim(ty,6/interpRes);	// computing index
-				//generatePlotGS(ty);						// generate GS and plot
+				//ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
+				//computingIndexInterim(ty,6/interpRes);	// computing index
+				generatePlotGS(ty);						// generate GS and plot
 				//generateAnimateGS(ty);					// generate animation GS
 				break;
 				
@@ -159,7 +159,7 @@ public final class DownloadData{
 		if(basin==Basin.NAT)
 			reP.put("area"    , "78/231/-9/357"); // north/west/south/east
 		else if(basin==Basin.WNP)
-			reP.put("area"    , "78/81/-9/210"); // north/west/south/east
+			reP.put("area"    , "78/78/-9/210"); // north/west/south/east
 		else if(basin==Basin.SIO)
 			reP.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reP.put("format"  , "netcdf");
@@ -180,7 +180,7 @@ public final class DownloadData{
 		if(basin==Basin.NAT)
 			reS.put("area"    , "78/231/-9/357"); // north/west/south/east
 		else if(basin==Basin.WNP)
-			reS.put("area"    , "78/81/-9/210"); // north/west/south/east
+			reS.put("area"    , "78/78/-9/210"); // north/west/south/east
 		else if(basin==Basin.SIO)
 			reS.put("area"    , "9/0/-78/120"); // north/west/south/east
 		reS.put("format"  , "netcdf");
@@ -219,7 +219,7 @@ public final class DownloadData{
 		if(basin==Basin.NAT)
 			reP.put("area"    , "78/231/-9/357"); // north/west/south/east
 		else if(basin==Basin.WNP)
-			reP.put("area"    , "78/81/-9/210"); // north/west/south/east
+			reP.put("area"    , "78/78/-9/210"); // north/west/south/east
 		else if(basin==Basin.SIO)
 			reP.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reP.put("format"  , "netcdf");
@@ -243,7 +243,7 @@ public final class DownloadData{
 		if(basin==Basin.NAT)
 			reS.put("area"    , "78/231/-9/357"); // north/west/south/east
 		else if(basin==Basin.WNP)
-			reS.put("area"    , "78/81/-9/210"); // north/west/south/east
+			reS.put("area"    , "78/78/-9/210"); // north/west/south/east
 		else if(basin==Basin.SIO)
 			reS.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reS.put("format"  , "netcdf");
@@ -303,7 +303,7 @@ public final class DownloadData{
 		sb.append("dset ^"+ty.getID()+"_"+interpRes+".dat\n");
 		sb.append("undef -9.99e8\n");
 		sb.append("title "+ty.getID()+"\n");
-		sb.append("xdef 173 linear  81 0.75\n");
+		sb.append("xdef 177 linear  78 0.75\n");
 		sb.append("ydef 117 linear  -9 0.75\n");
 		sb.append("zdef   2 levels 850 200\n");
 		sb.append("tdef "+ty.getTCount()+" linear "+new MDate(ty.getTime(0)).toGradsDate()+" 6hr\n");
@@ -586,6 +586,18 @@ public final class DownloadData{
 		sb.append("'set t 'tt\n");
 		sb.append("'q time'\n");
 		sb.append("time=subwrd(result,3)\n");
+		if(basin==Basin.NAT){
+			sb.append("'set lon 243 330'\n");
+			sb.append("'set lat 1.5 54'\n");
+		}else if(basin==Basin.WNP){
+			sb.append("'set lon 90 180'\n");
+			sb.append("'set lat 1.5 54'\n");
+		}else if(basin==Basin.SIO){
+			sb.append("'set lon 21 111'\n");
+			sb.append("'set lat -1.5 -54'\n");
+		}else{
+			throw new IllegalArgumentException("unsupported basin: "+basin);
+		}
 		sb.append("'set lev 200'\n");
 		sb.append("'setvpage 2 2 2 1'\n");
 		sb.append("'set parea 0.7 10 0 8.5'\n");
@@ -615,6 +627,18 @@ public final class DownloadData{
 		sb.append("'setvpage 2 2 1 1'\n");
 		sb.append("'set parea 0.8 10 0 8.5'\n");
 		sb.append("'setlopts 7 0.2 10 10'\n");
+		if(basin==Basin.NAT){
+			sb.append("'set lon 243 330'\n");
+			sb.append("'set lat 1.5 54'\n");
+		}else if(basin==Basin.WNP){
+			sb.append("'set lon 90 180'\n");
+			sb.append("'set lat 1.5 54'\n");
+		}else if(basin==Basin.SIO){
+			sb.append("'set lon 21 111'\n");
+			sb.append("'set lat -1.5 -54'\n");
+		}else{
+			throw new IllegalArgumentException("unsupported basin: "+basin);
+		}
 		sb.append("'set lev 200'\n");
 		sb.append("'set grid off'\n");
 		sb.append("'set gxout shaded'\n");
