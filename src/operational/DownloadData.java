@@ -49,6 +49,10 @@ public final class DownloadData{
 	
 	static final int interpRes=6;	// time interval (in hours) after interpolation
 	
+	static final float[] llWNP=new float[]{ 90,180, 1.5f, 54}; // computational range for WNP
+	static final float[] llNAT=new float[]{243,330, 1.5f, 54}; // computational range for NAT
+	static final float[] llSIO=new float[]{ 21,111,-1.5f,-54}; // computational range for SIO
+	
 	static final Predicate<Typhoon> cond=ty->{
 		int year=new MDate(ty.getTime(0)).getYear();
 		return year==2016&&(Integer.parseInt(ty.getID())==1612);
@@ -58,7 +62,7 @@ public final class DownloadData{
 	static final Reanalysis gds=Reanalysis.ERAInterim;
 	static final Basin    basin=Basin.WNP;
 	
-	static final String path="D:/Data/ULFI/";
+	static final String path="G:/Data/ULFI/";
 	static final String domain=getDomain(basin);
 	
 	static final List<Typhoon> all=AccessBestTrack.getTyphoons("d:/Data/Typhoons/"+ds+"/"+ds+".txt","",ds);
@@ -70,9 +74,9 @@ public final class DownloadData{
 	static String getDomain(Basin basin){
 		// get computational domain, smaller than that of downloading data
 		switch(basin){
-		case WNP: return "lon(90,180);lat(1.5,54)";
-		case NAT: return "lon(243,330);lat(1.5,54)";
-		case SIO: return "lon(21,111);lat(-1.5,-54)";
+		case WNP: return "lon("+llWNP[0]+","+llWNP[1]+");lat("+llWNP[2]+","+llWNP[3]+")";
+		case NAT: return "lon("+llNAT[0]+","+llNAT[1]+");lat("+llNAT[2]+","+llNAT[3]+")";
+		case SIO: return "lon("+llSIO[0]+","+llSIO[1]+");lat("+llSIO[2]+","+llSIO[3]+")";
 		default : throw new IllegalArgumentException("unsupported basin: "+basin);
 		}
 	}
@@ -91,9 +95,9 @@ public final class DownloadData{
 			switch(gds){
 			case ERAInterim:
 				//JythonDownload(interp,prepareJSONDataInterim(ty));
-				//extractDataInterim(ty);					// extract NetCDF data into binary data
-				//ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
-				//computingIndexInterim(ty,6/interpRes);	// computing index
+				extractDataInterim(ty);					// extract NetCDF data into binary data
+				ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
+				computingIndexInterim(ty,6/interpRes);	// computing index
 				generatePlotGS(ty);						// generate GS and plot
 				//generateAnimateGS(ty);					// generate animation GS
 				break;
@@ -285,6 +289,8 @@ public final class DownloadData{
 		sb.append("'d v(lev=200)'\n");
 		sb.append("'d T(lev=850)'\n");
 		sb.append("'d T(lev=200)'\n");
+		sb.append("'d hdivg(u(lev=850),v(lev=850))'\n");
+		sb.append("'d hdivg(u(lev=200),v(lev=200))'\n");
 		sb.append("tt=tt+1\n");
 		sb.append("endwhile\n\n");
 		
@@ -307,11 +313,12 @@ public final class DownloadData{
 		sb.append("ydef 117 linear  -9 0.75\n");
 		sb.append("zdef   2 levels 850 200\n");
 		sb.append("tdef "+ty.getTCount()+" linear "+new MDate(ty.getTime(0)).toGradsDate()+" 6hr\n");
-		sb.append("vars 4\n");
+		sb.append("vars 5\n");
 		sb.append("sst 0 99 sea surface temperature (K)\n");
 		sb.append("u   2 99 U velocity (m s**-1)\n");
 		sb.append("v   2 99 V velocity (m s**-1)\n");
 		sb.append("T   2 99 temperature (K)\n");
+		sb.append("div 2 99 horizontal divergence (s**-1)\n");
 		sb.append("endvars\n");
 		
 		try(FileWriter fw=new FileWriter(npath+ty.getID()+"_"+interpRes+".ctl")){
@@ -407,7 +414,7 @@ public final class DownloadData{
 		}
 		
 		DiagnosisFactory df=DiagnosisFactory.parseFile(npath+tr.getID()+"_"+interpRes+".ctl");
-		DataDescriptor dd=df.getDataDescriptor();
+		DataDescriptor dd=df.getDataDescriptor(); df.setPrinting(false);
 		
 		String rng=domain+";"+tr.getTRange();
 		
@@ -415,7 +422,7 @@ public final class DownloadData{
 		Variable[] wind=df.getVariables(r,"u","v","T");
 		
 		/*** computing horizontal indices ***/
-		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC");
+		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC","VWS");
 		
 		for(Variable v:ArrayUtil.concatAll(Variable.class,wind,idx1)) v.setUndef(wind[0].getUndef());
 		for(Variable v:idx1) v.setName(v.getName()+"srf");
@@ -435,12 +442,12 @@ public final class DownloadData{
 		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(npath+tr.getID()+"_"+interpRes+".ctl",72,19,2,0.3f,-650,850));
 		CsmDescriptor csd=(CsmDescriptor)df2.getDataDescriptor();
 		
-		CylindricalSpatialModel csm=new CylindricalSpatialModel(csd);
-		DynamicMethodsInCC dm=new DynamicMethodsInCC(csm);
+		CylindricalSpatialModel  csm=new CylindricalSpatialModel(csd);
+		DynamicMethodsInCC        dm=new DynamicMethodsInCC(csm);
 		ThermoDynamicMethodsInCC tdm=new ThermoDynamicMethodsInCC(csm);
-		CoordinateTransformation ct=new CoordinateTransformation(new SphericalSpatialModel(dd),csm);
+		CoordinateTransformation  ct=new CoordinateTransformation(new SphericalSpatialModel(dd),csm);
 		
-		Variable[] vars=df2.getVariables(new Range("",csd),false,"u","v");
+		Variable[] vars=df2.getVariables(new Range("",csd),false,"u","v","div");
 		Variable[] shrs=dm.cVerticalWindShear(vars[0],vars[1]);
 		Variable   sst =df2.getVariables(new Range("z(1,1)",csd),false,"sst")[0];
 		
@@ -449,6 +456,7 @@ public final class DownloadData{
 		
 		Variable vwsm=shrsum.hypotenuse(shrsvm); vwsm.setName("vws");
 		Variable sstm=dm.cRadialAverage(sst,1,9).anomalizeX().minusEq(273.15f);	// within 300 km
+		Variable divm=dm.cRadialAverage(vars[2],1,9).anomalizeX();		// within 300 km
 		
 		Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 		Variable Va=utvr[1].copy(); Va.anomalizeX();
@@ -465,7 +473,7 @@ public final class DownloadData{
 		Variable mpi =tdm.cMPIWNP(sstm);
 		
 		dw=DataIOFactory.getDataWrite(dd,npath+"alongTrackDiags_"+interpRes+".dat");
-		dw.writeData(dd,new Variable[]{sstm,vwsm,REFC,PEFC,ETA,zeta,fm,ISB,ULFI,mpi});	dw.closeFile();
+		dw.writeData(dd,sstm,vwsm,REFC,PEFC,ETA,zeta,fm,ISB,ULFI,mpi,divm);	dw.closeFile();
 		
 		IOUtil.replaceContent(npath+"alongTrackDiags_"+interpRes+".ctl",
 			dd.getTDef().getFirst().toGradsDate(),
@@ -587,17 +595,15 @@ public final class DownloadData{
 		sb.append("'q time'\n");
 		sb.append("time=subwrd(result,3)\n");
 		if(basin==Basin.NAT){
-			sb.append("'set lon 243 330'\n");
-			sb.append("'set lat 1.5 54'\n");
+			sb.append("'set lon "+llNAT[0]+" "+llNAT[1]+"'\n");
+			sb.append("'set lat "+llNAT[2]+" "+llNAT[3]+"'\n");
 		}else if(basin==Basin.WNP){
-			sb.append("'set lon 90 180'\n");
-			sb.append("'set lat 1.5 54'\n");
+			sb.append("'set lon "+llWNP[0]+" "+llWNP[1]+"'\n");
+			sb.append("'set lat "+llWNP[2]+" "+llWNP[3]+"'\n");
 		}else if(basin==Basin.SIO){
-			sb.append("'set lon 21 111'\n");
-			sb.append("'set lat -1.5 -54'\n");
-		}else{
-			throw new IllegalArgumentException("unsupported basin: "+basin);
-		}
+			sb.append("'set lon "+llSIO[0]+" "+llSIO[1]+"'\n");
+			sb.append("'set lat "+llSIO[2]+" "+llSIO[3]+"'\n");
+		}else throw new IllegalArgumentException("unsupported basin: "+basin);
 		sb.append("'set lev 200'\n");
 		sb.append("'setvpage 2 2 2 1'\n");
 		sb.append("'set parea 0.7 10 0 8.5'\n");
@@ -628,17 +634,15 @@ public final class DownloadData{
 		sb.append("'set parea 0.8 10 0 8.5'\n");
 		sb.append("'setlopts 7 0.2 10 10'\n");
 		if(basin==Basin.NAT){
-			sb.append("'set lon 243 330'\n");
-			sb.append("'set lat 1.5 54'\n");
+			sb.append("'set lon "+llNAT[0]+" "+llNAT[1]+"'\n");
+			sb.append("'set lat "+llNAT[2]+" "+llNAT[3]+"'\n");
 		}else if(basin==Basin.WNP){
-			sb.append("'set lon 90 180'\n");
-			sb.append("'set lat 1.5 54'\n");
+			sb.append("'set lon "+llWNP[0]+" "+llWNP[1]+"'\n");
+			sb.append("'set lat "+llWNP[2]+" "+llWNP[3]+"'\n");
 		}else if(basin==Basin.SIO){
-			sb.append("'set lon 21 111'\n");
-			sb.append("'set lat -1.5 -54'\n");
-		}else{
-			throw new IllegalArgumentException("unsupported basin: "+basin);
-		}
+			sb.append("'set lon "+llSIO[0]+" "+llSIO[1]+"'\n");
+			sb.append("'set lat "+llSIO[2]+" "+llSIO[3]+"'\n");
+		}else throw new IllegalArgumentException("unsupported basin: "+basin);
 		sb.append("'set lev 200'\n");
 		sb.append("'set grid off'\n");
 		sb.append("'set gxout shaded'\n");
