@@ -55,7 +55,7 @@ public final class DownloadData{
 	
 	static final Predicate<Typhoon> cond=ty->{
 		int year=new MDate(ty.getTime(0)).getYear();
-		return year==2016&&(Integer.parseInt(ty.getID())==1612);
+		return year==2010&&Integer.parseInt(ty.getID())==1011;
 	};
 	
 	static final DataSets    ds=DataSets.JMA;
@@ -79,7 +79,7 @@ public final class DownloadData{
 		case SIO: return "lon("+llSIO[0]+","+llSIO[1]+");lat("+llSIO[2]+","+llSIO[3]+")";
 		default : throw new IllegalArgumentException("unsupported basin: "+basin);
 		}
-	}
+	} 
 	
 	
 	//
@@ -95,7 +95,7 @@ public final class DownloadData{
 			switch(gds){
 			case ERAInterim:
 				//JythonDownload(interp,prepareJSONDataInterim(ty));
-				extractDataInterim(ty);					// extract NetCDF data into binary data
+				//extractDataInterim(ty);					// extract NetCDF data into binary data
 				ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
 				computingIndexInterim(ty,6/interpRes);	// computing index
 				generatePlotGS(ty);						// generate GS and plot
@@ -163,7 +163,7 @@ public final class DownloadData{
 		if(basin==Basin.NAT)
 			reP.put("area"    , "78/231/-9/357"); // north/west/south/east
 		else if(basin==Basin.WNP)
-			reP.put("area"    , "78/78/-9/210"); // north/west/south/east
+			reP.put("area"    , "84/78/-15/228"); // north/west/south/east
 		else if(basin==Basin.SIO)
 			reP.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reP.put("format"  , "netcdf");
@@ -184,7 +184,7 @@ public final class DownloadData{
 		if(basin==Basin.NAT)
 			reS.put("area"    , "78/231/-9/357"); // north/west/south/east
 		else if(basin==Basin.WNP)
-			reS.put("area"    , "78/78/-9/210"); // north/west/south/east
+			reS.put("area"    , "84/78/-15/228"); // north/west/south/east
 		else if(basin==Basin.SIO)
 			reS.put("area"    , "9/0/-78/120"); // north/west/south/east
 		reS.put("format"  , "netcdf");
@@ -309,8 +309,8 @@ public final class DownloadData{
 		sb.append("dset ^"+ty.getID()+"_"+interpRes+".dat\n");
 		sb.append("undef -9.99e8\n");
 		sb.append("title "+ty.getID()+"\n");
-		sb.append("xdef 177 linear  78 0.75\n");
-		sb.append("ydef 117 linear  -9 0.75\n");
+		sb.append("xdef 201 linear  78 0.75\n");
+		sb.append("ydef 133 linear -15 0.75\n");
 		sb.append("zdef   2 levels 850 200\n");
 		sb.append("tdef "+ty.getTCount()+" linear "+new MDate(ty.getTime(0)).toGradsDate()+" 6hr\n");
 		sb.append("vars 5\n");
@@ -402,6 +402,8 @@ public final class DownloadData{
 		if(times<1) throw new IllegalArgumentException("times should be at least 1");
 		
 		int year=new MDate(tr.getTime(0)).getYear();
+		int strRIdx=15;	// 300 km
+		int endRIdx=24;	// 600 km
 		
 		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
 		
@@ -422,7 +424,7 @@ public final class DownloadData{
 		Variable[] wind=df.getVariables(r,"u","v","T");
 		
 		/*** computing horizontal indices ***/
-		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,19,72,9,18,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC","VWS");
+		Variable[] idx1=IndexInSC.c2DHorizontalIndex(dd,rng,tr,0.3f,endRIdx+1,72,strRIdx,endRIdx,"REFC","PEFC","AEFC","ISB","ETA","ULFI","htHFC","VWS");
 		
 		for(Variable v:ArrayUtil.concatAll(Variable.class,wind,idx1)) v.setUndef(wind[0].getUndef());
 		for(Variable v:idx1) v.setName(v.getName()+"srf");
@@ -439,7 +441,7 @@ public final class DownloadData{
 		);
 		
 		/*** computing along-track diagnostics ***/
-		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(npath+tr.getID()+"_"+interpRes+".ctl",72,19,2,0.3f,-650,850));
+		DiagnosisFactory df2=DiagnosisFactory.parseContent(tr.toCSMString(npath+tr.getID()+"_"+interpRes+".ctl",72,endRIdx+1,2,0.3f,-650,850));
 		CsmDescriptor csd=(CsmDescriptor)df2.getDataDescriptor();
 		
 		CylindricalSpatialModel  csm=new CylindricalSpatialModel(csd);
@@ -451,24 +453,24 @@ public final class DownloadData{
 		Variable[] shrs=dm.cVerticalWindShear(vars[0],vars[1]);
 		Variable   sst =df2.getVariables(new Range("z(1,1)",csd),false,"sst")[0];
 		
-		Variable shrsum=dm.cRadialAverage(shrs[0],1,9).anomalizeX();	// within 300 km
-		Variable shrsvm=dm.cRadialAverage(shrs[1],1,9).anomalizeX();	// within 300 km
+		Variable shrsum=dm.cRadialAverage(shrs[0],1,strRIdx).anomalizeX();	// within 300 km
+		Variable shrsvm=dm.cRadialAverage(shrs[1],1,strRIdx).anomalizeX();	// within 300 km
 		
 		Variable vwsm=shrsum.hypotenuse(shrsvm); vwsm.setName("vws");
-		Variable sstm=dm.cRadialAverage(sst,1,9).anomalizeX().minusEq(273.15f);	// within 300 km
-		Variable divm=dm.cRadialAverage(vars[2],1,9).anomalizeX();		// within 300 km
+		Variable sstm=dm.cRadialAverage(sst,1,strRIdx).anomalizeX().minusEq(273.15f);	// within 300 km
+		Variable divm=dm.cRadialAverage(vars[2],1,strRIdx).anomalizeX();				// within 300 km
 		
 		Variable[] utvr=ct.reprojectToCylindrical(vars[0],vars[1]);
 		Variable Va=utvr[1].copy(); Va.anomalizeX();
-		Variable PEFC=dm.cPEFC(Va).averageAlong(Dimension.Y, 9,18);	// 300-600 km
+		Variable PEFC=dm.cPEFC(Va).averageAlong(Dimension.Y,strRIdx,endRIdx);	// 300-600 km
 		dm.cStormRelativeAziRadVelocity(tr.getUVel(),tr.getVVel(),utvr[0],utvr[1]);
 		
 		Variable utm =utvr[0].anomalizeX();	utvr[1].anomalizeX();
-		Variable REFC=dm.cREFC(utvr[0],utvr[1]).averageAlong(Dimension.Y, 9,18);	// 300-600 km
-		Variable ETA =dm.cMeanAbsoluteVorticity(utm).averageAlong(Dimension.Y, 9,18);
-		Variable zeta=dm.cMeanRelativeVorticity(utm).averageAlong(Dimension.Y, 9,18);
-		Variable fm  =dm.cMeanPlanetaryVorticity(utm).averageAlong(Dimension.Y, 9,18);
-		Variable ISB =dm.cMeanInertialStabilityByUT(utm).averageAlong(Dimension.Y, 9,18);
+		Variable REFC=dm.cREFC(utvr[0],utvr[1]).averageAlong(Dimension.Y,strRIdx,endRIdx);	// 300-600 km
+		Variable ETA =dm.cMeanAbsoluteVorticity(utm).averageAlong(Dimension.Y,strRIdx,endRIdx);
+		Variable zeta=dm.cMeanRelativeVorticity(utm).averageAlong(Dimension.Y,strRIdx,endRIdx);
+		Variable fm  =dm.cMeanPlanetaryVorticity(utm).averageAlong(Dimension.Y,strRIdx,endRIdx);
+		Variable ISB =dm.cMeanInertialStabilityByUT(utm).averageAlong(Dimension.Y,strRIdx,endRIdx);
 		Variable ULFI=REFC.plus(PEFC).divideEq(ETA).divideEq(86400f); ULFI.setName("ULFI");
 		Variable mpi =tdm.cMPIWNP(sstm);
 		
@@ -572,21 +574,24 @@ public final class DownloadData{
 		for(int l=0,L=tr.getTCount();l<L;l++) sb.append(tr.getYPosition(l)+" ");
 		sb.append("\"\n\n");
 		
-		sb.append("'set rgb 16   0   0 255'\n");
-		sb.append("'set rgb 17  55  55 255'\n");
-		sb.append("'set rgb 18 110 110 255'\n");
-		sb.append("'set rgb 19 165 165 255'\n");
-		sb.append("'set rgb 20 220 220 255'\n\n");
+		sb.append("'set rgb 86   0   0 255'\n");
+		sb.append("'set rgb 87  40  40 255'\n");
+		sb.append("'set rgb 88  80  80 255'\n");
+		sb.append("'set rgb 89 120 120 255'\n");
+		sb.append("'set rgb 90 160 160 255'\n");
+		sb.append("'set rgb 91 200 200 255'\n\n");
 		
-		sb.append("'set rgb 21 255 220 220'\n");
-		sb.append("'set rgb 22 255 165 165'\n");
-		sb.append("'set rgb 23 255 110 110'\n");
-		sb.append("'set rgb 24 255  55  55'\n");
-		sb.append("'set rgb 25 255   0   0'\n\n");
+		sb.append("'set rgb 92 255 200 200'\n");
+		sb.append("'set rgb 93 255 160 160'\n");
+		sb.append("'set rgb 94 255 120 120'\n");
+		sb.append("'set rgb 95 255  80  80'\n");
+		sb.append("'set rgb 96 255  40  40'\n");
+		sb.append("'set rgb 97 255   0   0'\n\n");
 		
 		sb.append("'set grads off'\n");
 		sb.append("'set mpdset mres'\n");
-		sb.append("'set map 15 1 11'\n\n");
+		sb.append("'set map 15 1 11'\n");
+		sb.append("'set gxout shaded'\n\n");
 		
 		sb.append("cc=1\n");
 		sb.append("tt=1\n");
@@ -594,6 +599,10 @@ public final class DownloadData{
 		sb.append("'set t 'tt\n");
 		sb.append("'q time'\n");
 		sb.append("time=subwrd(result,3)\n");
+		sb.append("'setvpage 3 3 3 2'\n");
+		sb.append("'set parea 0.9 10 0 8.49'\n");
+		sb.append("'setlopts 6 0.28 10 10'\n");
+		sb.append("'set grid off'\n");
 		if(basin==Basin.NAT){
 			sb.append("'set lon "+llNAT[0]+" "+llNAT[1]+"'\n");
 			sb.append("'set lat "+llNAT[2]+" "+llNAT[3]+"'\n");
@@ -605,24 +614,24 @@ public final class DownloadData{
 			sb.append("'set lat "+llSIO[2]+" "+llSIO[3]+"'\n");
 		}else throw new IllegalArgumentException("unsupported basin: "+basin);
 		sb.append("'set lev 200'\n");
-		sb.append("'setvpage 2 2 2 1'\n");
-		sb.append("'set parea 0.7 10 0 8.5'\n");
-		sb.append("'setlopts 7 0.2 10 10'\n");
-		sb.append("'set grid off'\n");
-		sb.append("'set gxout shaded'\n");
-		sb.append("'set clevs -15 -12 -9 -6 -3 3 6 9 12 15'\n");
-		sb.append("'set ccols 16 17 18 19 20 0 21 22 23 24 25'\n");
+		//sb.append("'set clevs -16 -12 -8 -5 -3 -2    2  3  5  8 12 16'\n");
+		//sb.append("'set ccols  86  87 88 89 90 91 0 92 93 94 95 96 97'\n");
+		sb.append("'set clevs -18 -15 -12 -9 -6 -3    3  6  9 12 15 18'\n");
+		sb.append("'set ccols  86  87  88 89 90 91 0 92 93 94 95 96 97'\n");
 		sb.append("'d aefcsrf/(etasrf*86400)'\n");
-		sb.append("'set gxout contour'\n");
-		sb.append("'set rbrange 5 55'\n");
 		sb.append("'set cthick 5'\n");
 		sb.append("'set arrowhead -0.3'\n");
 		sb.append("'set arrscl 0.5 80'\n");
 		sb.append("'d skip(u,2);v'\n");
-		sb.append("'cbarn 1 1 10.4 4.4'\n");
+		sb.append("'cbarn 1 1 10.2 4.3'\n");
+		sb.append("'set gxout contour'\n");
+		sb.append("'set clevs 0'\n");
+		sb.append("'set ccolor 3'\n");
+		sb.append("'set cthick 9'\n");
+		sb.append("'d etasrf'\n");
 		sb.append("lon=subwrd(lons,cc)\n");
 		sb.append("lat=subwrd(lats,cc)\n");
-		sb.append("'pty ' lon' 'lat' 0.4 1 9'\n");
+		sb.append("'pty ' lon' 'lat' 0.6 1 9'\n");
 		sb.append("'drawtime "+tr.getName()+"("+tr.getID()+")'\n");
 		sb.append("'set x 1'\n");
 		sb.append("'set y 1'\n");
@@ -630,9 +639,11 @@ public final class DownloadData{
 		sb.append("'d prs"+tr.getName()+".2(x=1,y=1,z=1)'\n");
 		sb.append("prs=subwrd(result,4)\n\n");
 		
-		sb.append("'setvpage 2 2 1 1'\n");
-		sb.append("'set parea 0.8 10 0 8.5'\n");
-		sb.append("'setlopts 7 0.2 10 10'\n");
+		sb.append("'setvpage 3 3 2 2'\n");
+		sb.append("'set parea 0.9 10 0 8.49'\n");
+		sb.append("'setlopts 6 0.28 10 10'\n");
+		sb.append("'set gxout shaded'\n");
+		sb.append("'set grid on'\n");
 		if(basin==Basin.NAT){
 			sb.append("'set lon "+llNAT[0]+" "+llNAT[1]+"'\n");
 			sb.append("'set lat "+llNAT[2]+" "+llNAT[3]+"'\n");
@@ -643,72 +654,116 @@ public final class DownloadData{
 			sb.append("'set lon "+llSIO[0]+" "+llSIO[1]+"'\n");
 			sb.append("'set lat "+llSIO[2]+" "+llSIO[3]+"'\n");
 		}else throw new IllegalArgumentException("unsupported basin: "+basin);
-		sb.append("'set lev 200'\n");
-		sb.append("'set grid off'\n");
-		sb.append("'set gxout shaded'\n");
 		sb.append("'set cmin 10'\n");
 		sb.append("'set rbrange 0 60'\n");
 		sb.append("'set cint 5'\n");
-		sb.append("'d mag(u(lev=200)-u(lev=850),v(lev=200)-v(lev=850))'\n");
-		sb.append("'cbarn 1 1 10.4 4.4'\n");
-		sb.append("'pty ' lon' 'lat' 0.4 1 9'\n");
+		sb.append("'d vwssrf'\n");
+		sb.append("'cbarn 1 1 10.2 4.3'\n");
+		sb.append("'pty ' lon' 'lat' 0.6 1 9'\n");
 		sb.append("'draw title vertical wind shear (200hPa-850hPa)'\n\n");
 		
-		sb.append("'setvpage 2 2 1 2'\n");
-		sb.append("'set parea 0.8 10 0 8.5'\n");
-		sb.append("'setlopts 7 0.2 10 10'\n");
-		sb.append("'set lev 200'\n");
-		sb.append("'set grid off'\n");
-		sb.append("'set gxout shaded'\n");
+		sb.append("'setvpage 3 3 1 2'\n");
+		sb.append("'set parea 0.9 10 0 8.49'\n");
+		sb.append("'setlopts 6 0.28 10 10'\n");
 		sb.append("'set clevs 9 12 15 18 21 24 27 28 28.5 29 29.5 30 30.5 31'\n");
 		sb.append("'d sst.3-273.15'\n");
-		sb.append("'cbarn 1 1 10.4 4.4'\n");
-		sb.append("'pty ' lon' 'lat' 0.4 1 9'\n");
+		sb.append("'cbarn 1 1 10.2 4.3'\n");
+		sb.append("'pty ' lon' 'lat' 0.6 1 9'\n");
 		sb.append("'draw title sea surface temperature'\n\n");
 		
-		sb.append("'setvpage 2 2 2 2'\n");
-		sb.append("'set parea 0.8 9.3 1.2 7.25'\n");
-		sb.append("'setlopts 7 0.2 1 10'\n");
-		sb.append("'set grid on'\n");
+		sb.append("'setvpage 3 3 1 3'\n");
+		sb.append("'set parea 0.9 10 0 8.49'\n");
+		sb.append("'setlopts 6 0.28 10 10'\n");
+		sb.append("'set lev 200'\n");
+		sb.append("'set clevs  -4  -3  -2 -1.5  -1 -0.5    0.5  1  1.5   2  3  4'\n");
+		sb.append("'set ccols  86  87  88   89  90   91  0  92 93   94  95 96 97'\n");
+		sb.append("'d smth9(smth9(smth9(smth9(div.3))))*1e5'\n");
+		sb.append("'cbarn 1 1 10.2 4.3'\n");
+		sb.append("'pty ' lon' 'lat' 0.6 1 9'\n");
+		sb.append("'draw title 200hPa divergence (1e-5)'\n\n");
+		
+		sb.append("'setvpage 3 3 3 1'\n");
+		sb.append("'set parea 0.9 10 0 8.49'\n");
+		sb.append("'setlopts 6 0.28 10 10'\n");
+		sb.append("'set clevs -140 -100 -50 -25 -15 -10   10 15 25 50 100 140'\n");
+		sb.append("'set ccols   86   87  88  89  90  91 0 92 93 94 95  96  97'\n");
+		sb.append("'d refcsrf'\n");
+		sb.append("'cbarn 1 1 10.2 4.3'\n");
+		sb.append("'pty ' lon' 'lat' 0.6 1 9'\n");
+		sb.append("'draw title REFC'\n\n");
+		
+		sb.append("'setvpage 3 3 2 1'\n");
+		sb.append("'set parea 0.9 10 0 8.49'\n");
+		sb.append("'setlopts 6 0.28 10 10'\n");
+		sb.append("'set clevs -14 -10 -8 -6 -4 -2    2  4  6  8 10 14'\n");
+		sb.append("'set ccols  86  87 88 89 90 91 0 92 93 94 95 96 97'\n");
+		sb.append("'d pefcsrf'\n");
+		sb.append("'cbarn 1 1 10.2 4.3'\n");
+		sb.append("'pty ' lon' 'lat' 0.6 1 9'\n");
+		sb.append("'draw title PEFC'\n\n");
+		
+		sb.append("'setvpage 3 3 1 1'\n");
+		sb.append("'set parea 0.9 10 0 8.49'\n");
+		sb.append("'setlopts 6 0.28 10 10'\n");
+		sb.append("'color -gxout shaded -kind grainbow -levs 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20'\n");
+		sb.append("'d etasrf*1e5'\n");
+		sb.append("'set clevs 0'\n");
+		sb.append("'set gxout contour'\n");
+		sb.append("'set cthick 9'\n");
+		sb.append("'set ccolor 0'\n");
+		sb.append("'d etasrf*1e5'\n");
+		sb.append("'set gxout shaded'\n");
+		sb.append("'cbarnskip 2 1 1 10.4 4.4'\n");
+		sb.append("'pty ' lon' 'lat' 0.6 1 9'\n");
+		sb.append("'draw title absolute vorticity'\n\n");
+		
+		sb.append("'setvpage 1.5 3 1.5 3'\n");
+		sb.append("'set parea 0.46 4.47 0.53 7.97'\n");
+		sb.append("'setlopts 6 0.127 1 10'\n");
 		sb.append("'set x 1'\n");
 		sb.append("'set y 1'\n");
-		sb.append("'set lev 200'\n");
 		sb.append("'set t 1 "+tr.getTCount()+"'\n");
 		sb.append("'set cthick 12'\n");
 		sb.append("'set cmark 5'\n");
 		sb.append("'set digsize 0.1'\n");
-		sb.append("'set vrange 920 1010'\n");
+		sb.append("'set vrange 890 1010'\n");
 		sb.append("'d prs"+tr.getName()+".2(x=1,y=1,z=1)'\n");
 		sb.append("'q w2xy 'time' 'prs\n");
 		sb.append("xx=subwrd(result,3)\n");
 		sb.append("yy=subwrd(result,6)\n");
 		sb.append("'draw mark 3 'xx' 'yy' 0.3'\n");
-		sb.append("'set vrange 25 31'\n");
+		sb.append("'set vrange 19 31'\n");
 		sb.append("'set ylpos 0 r'\n");
 		sb.append("'set ylint 1'\n");
 		sb.append("'set ccolor 2 1 4'\n");
 		sb.append("'set cmark 0'\n");
 		sb.append("'d sst.4(x=1,y=1,z=1)'\n");
 		sb.append("'set vrange 0 36'\n");
-		sb.append("'set ylpos 0.55 r'\n");
+		sb.append("'set ylpos 0.34 r'\n");
 		sb.append("'set ylint 3'\n");
 		sb.append("'set ccolor 4 1 4'\n");
 		sb.append("'set cmark 0'\n");
 		sb.append("'d vws.4(x=1,y=1,z=1)'\n");
-		sb.append("'set vrange -6 6'\n");
-		sb.append("'set ylpos 1.1 r'\n");
+		sb.append("'set vrange -5 7'\n");
+		sb.append("'set ylpos 0.68 r'\n");
 		sb.append("'set ylint 1'\n");
 		sb.append("'set ccolor 3 1 4'\n");
 		sb.append("'set cmark 0'\n");
-		sb.append("'d ulfi.4(x=1,y=1,lev=200)'\n");
-		sb.append("'draw title along-track vars'\n");
-		sb.append("'set strsiz 0.16'\n");
+		//sb.append("'d ulfi.4(x=1,y=1,lev=200)'\n");
+		sb.append("'d (refc.4(x=1,y=1,lev=200)+pefc.4(x=1,y=1,lev=200))/(etam.4(x=1,y=1,lev=200)*86400)'\n");
+		sb.append("'set ccolor 15 1 4'\n");
+		sb.append("'set cmark 0'\n");
+		sb.append("'d div.4(x=1,y=1,lev=200)*1e5'\n");
+		sb.append("'set strsiz 0.12'\n");
 		sb.append("'set string 2'\n");
-		sb.append("'draw string 9.3 7.6 SST'\n");
+		sb.append("'draw string 4.4 8.15 SST'\n");
 		sb.append("'set string 4'\n");
-		sb.append("'draw string 9.9 7.6 VWS'\n");
+		sb.append("'draw string 4.75 8.15 VWS'\n");
 		sb.append("'set string 3'\n");
-		sb.append("'draw string 10.5 7.6 ULFI'\n\n");
+		sb.append("'draw string 5.12 8.15 ULFI'\n");
+		sb.append("'set string 1'\n");
+		sb.append("'set strsiz 0.14'\n");
+		sb.append("'draw string 1.6 8.15 along-track vars'\n\n");
 		
 		sb.append("'print'\n");
 		sb.append("'c'\n");
