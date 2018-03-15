@@ -309,10 +309,10 @@ public final class AllInOne{
 			
 			Record r=new Record(md.getLongTime(),lon,lat,4);
 			
-			r.setData(0,0  );
-			r.setData(1,0  );
-			r.setData(2,wnd);
-			r.setData(3,prs);
+			r.setData(Typhoon.UVEL,0  );
+			r.setData(Typhoon.VVEL,0  );
+			r.setData(Typhoon.Vmax,wnd);
+			r.setData(Typhoon.Pmin,prs);
 			
 			return r;
 		}

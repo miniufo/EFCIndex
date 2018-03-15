@@ -55,7 +55,7 @@ public final class DownloadData{
 	
 	static final Predicate<Typhoon> cond=ty->{
 		int year=new MDate(ty.getTime(0)).getYear();
-		return year==2010&&Integer.parseInt(ty.getID())==1011;
+		return year==2001;//&&(Integer.parseInt(ty.getID())>419);
 	};
 	
 	static final DataSets    ds=DataSets.JMA;
@@ -94,8 +94,8 @@ public final class DownloadData{
 			// downloading NetCDF data
 			switch(gds){
 			case ERAInterim:
-				//JythonDownload(interp,prepareJSONDataInterim(ty));
-				//extractDataInterim(ty);					// extract NetCDF data into binary data
+				JythonDownload(interp,prepareJSONDataInterim(ty));
+				extractDataInterim(ty);					// extract NetCDF data into binary data
 				ty.interpolateAlongT(6/interpRes-1);	// interpolate the typhoon data
 				computingIndexInterim(ty,6/interpRes);	// computing index
 				generatePlotGS(ty);						// generate GS and plot
@@ -163,7 +163,7 @@ public final class DownloadData{
 		if(basin==Basin.NAT)
 			reP.put("area"    , "78/231/-9/357"); // north/west/south/east
 		else if(basin==Basin.WNP)
-			reP.put("area"    , "84/78/-15/228"); // north/west/south/east
+			reP.put("area"    , "84/75/-15/228"); // north/west/south/east
 		else if(basin==Basin.SIO)
 			reP.put("area"    , "9/0/-78/111"); // north/west/south/east
 		reP.put("format"  , "netcdf");
@@ -309,7 +309,7 @@ public final class DownloadData{
 		sb.append("dset ^"+ty.getID()+"_"+interpRes+".dat\n");
 		sb.append("undef -9.99e8\n");
 		sb.append("title "+ty.getID()+"\n");
-		sb.append("xdef 201 linear  78 0.75\n");
+		sb.append("xdef 205 linear  75 0.75\n");
 		sb.append("ydef 133 linear -15 0.75\n");
 		sb.append("zdef   2 levels 850 200\n");
 		sb.append("tdef "+ty.getTCount()+" linear "+new MDate(ty.getTime(0)).toGradsDate()+" 6hr\n");
@@ -402,8 +402,8 @@ public final class DownloadData{
 		if(times<1) throw new IllegalArgumentException("times should be at least 1");
 		
 		int year=new MDate(tr.getTime(0)).getYear();
-		int strRIdx=15;	// 300 km
-		int endRIdx=24;	// 600 km
+		int strRIdx=9;	// 300 km
+		int endRIdx=18;	// 600 km
 		
 		String npath=path+ds+"/"+year+"/"+tr.getID()+"/";
 		
